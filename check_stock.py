@@ -38,7 +38,7 @@ def check_stocks():
             # 버튼 텍스트 확인 (소니스토어 구조에 맞춤)
             button_xpath = '//*[@id="root"]/div/div/div[2]/div/div[1]/form/div/div[6]/div[3]/div/ul/li[4]'
             element = wait.until(EC.presence_of_element_located((By.XPATH, button_xpath)))
-            send_telegram(f"[{time.strftime('%H:%M:%S')}] {product} : {element.text}")
+            send_telegram(f"[{time.strftime('%H:%M:%S')}] {product['name']} : {element.text}")
             if "일시품절" not in element.text:
                 available_items.append(product)
     finally:
