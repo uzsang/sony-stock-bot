@@ -1,0 +1,30 @@
+name: Sony Stock Checker
+
+on:
+  schedule:
+    # 5분마다 실행 (UTC 기준이므로 한국 시간과는 차이가 있음)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # 수동으로 실행해볼 수 있는 버튼 생성
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install selenium requests
+
+    - name: Check Stock
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python check_stock.py
