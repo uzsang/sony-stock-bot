@@ -2,8 +2,8 @@ name: Sony Stock Checker
 
 on:
   schedule:
-    # 5분마다 실행 (UTC 기준이므로 한국 시간과는 차이가 있음)
-    - cron: '*/5 * * * *'
+    # UTC 기준 0시(한국 시간 오전 9시), 12시(한국 시간 오후 9시)에 실행
+    - cron: '0 0,12 * * *'
   workflow_dispatch: # 수동으로 실행해볼 수 있는 버튼 생성
 
 jobs:
