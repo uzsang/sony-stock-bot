@@ -2,10 +2,8 @@ name: Sony Stock Checker
 
 on:
   schedule:
-    # 1. 정각에 실행: UTC 0시(오전9시), 9시(오후6시), 12시(오후9시)
-    - cron: '0 0,9,12 * * *'
-    # 2. 30분에 실행: UTC 2시 30분(오전11시 30분)
-    - cron: '30 2 * * *'
+    # 매 5분마다 실행
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
