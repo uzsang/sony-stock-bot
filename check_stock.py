@@ -28,23 +28,20 @@ def get_lowest_price():
         clean_price = int(re.sub(r'[^0-9]', '', price_text))
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         
-        # 아침9시/밤9시 정시 알림이거나, 사용자가 수동(Run workflow)으로 직접 실행했을 때
+        # 아침 9시 / 밤 9시 정기 브리핑이거나 수동 실행일 경우
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
         if is_regular_report:
-            # target을 'regular'방으로 설정하고 메시지 반환
             return {"target": "regular", "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
             
-        # 그 외 5분마다 도는 스케줄일 때는 '15만 원 미만'일 때만 알림 전송
+        # 5분 감시 주기일 경우 (15만 원 미만일 때만)
         if clean_price < 150000:
-            # target을 'watch'(특가 감시)방으로 설정하고 메시지 반환
             return {"target": "watch", "text": f"🚨 [특가 달성!] 09J29360 최저가가 15만 원 미만입니다!\n현재 최저가: {price_text}원"}
         else:
-            print(f"현재 가격이 {price_text}원이라서 알림을 건너뜁니다. (5분 주기 감시 중)")
+            print(f"현재 가격이 {price_text}원이라서 알림을 건너뜁니다. (5분 감시 중)")
             return None
         
     except Exception as e:
-        # 에러 발생 시에는 기본 감시방으로 알림을 보냅니다.
         return {"target": "watch", "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
     finally:
         driver.quit()
@@ -53,16 +50,17 @@ def send_telegram(result):
     if result is None:
         return
         
-    token = os.environ.get('TELEGRAM_TOKEN')
+    # 목적지(채팅방)는 항상 회원님의 개인 ID 하나로 고정
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
     
-    # target 값에 따라 어떤 Chat ID를 쓸지 결정합니다.
+    # 💡 전달할 봇(우체부)을 상황에 맞춰 선택
     if result["target"] == "regular":
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID_REGULAR')
+        token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
     else:
-        chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+        token = os.environ.get('TELEGRAM_TOKEN')
     
     if not token or not chat_id:
-        print("텔레그램 토큰이나 챗봇 ID가 설정되지 않았습니다.")
+        print("텔레그램 토큰이나 챗봇 ID가 누락되었습니다. Secrets 설정을 확인하세요.")
         return
         
     url = f"https://api.telegram.org/bot{token}/sendMessage"
