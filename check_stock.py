@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -14,7 +15,6 @@ def get_lowest_price():
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    # PC 버전 다나와 접속을 위해 User-Agent를 일반 PC 브라우저로 변경
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
     driver = webdriver.Chrome(options=options)
@@ -24,19 +24,29 @@ def get_lowest_price():
         wait = WebDriverWait(driver, 10)
         
         # 다나와 검색 결과 리스트에서 첫 번째 상품의 가격 요소 탐색
-        # 일반적으로 다나와는 p 태그의 price_sect 클래스 하위에 strong 태그로 가격을 표시합니다.
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
-        price_text = price_element.text
+        price_text = price_element.text  # 예: "148,500" 또는 "152,000"
         
-        return f"✅ 다나와 09J29360 현재 최저가: {price_text}원"
+        # 쉼표(,) 및 숫자가 아닌 문자를 모두 제거하여 순수 숫자만 추출합니다.
+        clean_price = int(re.sub(r'[^0-9]', '', price_text))
+        
+        # 💡 핵심 조건 추가: 15만 원 미만(150000)일 때만 메시지 생성
+        if clean_price < 150000:
+            return f"🚨 [가격 달성!] 09J29360 최저가가 15만 원 미만입니다!\n현재 최저가: {price_text}원"
+        else:
+            print(f"현재 가격이 {price_text}원이라서 15만 원 미만이 아닙니다. 알림을 건너뜁니다.")
+            return None  # 15만 원 이상이면 알림을 보내지 않음
         
     except Exception as e:
-        # 정확한 태그를 찾지 못했거나 웹페이지 로딩에 문제가 있는 경우
-        return f"⚠️ 가격 조회 실패. 다나와 웹페이지 구조가 예상과 다르거나 변경되었습니다. 코드를 수정해야 합니다.\n에러 내용: {e}"
+        return f"⚠️ 가격 조회 실패. 에러 내용: {e}"
     finally:
         driver.quit()
 
 def send_telegram(message):
+    # message가 None이면 함수를 종료하여 텔레그램을 보내지 않습니다.
+    if message is None:
+        return
+        
     token = os.environ.get('TELEGRAM_TOKEN')
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
     
@@ -50,5 +60,4 @@ def send_telegram(message):
 
 if __name__ == "__main__":
     message = get_lowest_price()
-    print(message)
     send_telegram(message)
