@@ -27,10 +27,8 @@ def get_lowest_price():
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
         
-        # 숫자가 아닌 문자 제거 (크기 비교용)
         clean_price = int(re.sub(r'[^0-9]', '', price_text))
         
-        # [가격 데이터베이스 로직]
         history_file = 'price_history.json'
         
         if os.path.exists(history_file):
@@ -40,43 +38,49 @@ def get_lowest_price():
         else:
             history = []
 
-        # 💡 현재 시간을 한국 시간(KST)으로 계산하여 기록 (%Y-%m-%d %H:%M:%S 형식)
         now_kst = datetime.utcnow() + timedelta(hours=9)
         now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
         
-        # 실행될 때마다 무조건 기록 누적
         history.append({'timestamp': now_str, 'price': clean_price, 'text': price_text})
         
-        # 14일(2주일)이 지난 과거 데이터 자동 삭제
         fourteen_days_ago = now_kst - timedelta(days=14)
         history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
         
-        # 데이터 파일 저장
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
-        # 최근 2주일간의 최저가 및 당시 날짜/시간 탐색
         if history:
             lowest_item = min(history, key=lambda x: x['price'])
-            # 💡 날짜와 시간을 모두 포함하여 표시 (예: 148,000원 (2026-07-02 17:45:00))
-            biweekly_lowest_text = f"{lowest_item['text']}원 ({lowest_item['timestamp']})"
+            lowest_price_str = lowest_item['text']
+            lowest_time_str = lowest_item['timestamp']
         else:
-            biweekly_lowest_text = f"{price_text}원 ({now_str})"
+            lowest_price_str = price_text
+            lowest_time_str = now_str
+
+        # 💡 [디자인 적용] 메시지를 표(카드) 형태로 예쁘게 만들어주는 함수
+        def format_message(title):
+            return f"""<b>{title}</b>
+┏━━━━━━━━━━━━━━━━━━━━━┓
+┣ ⏰ <b>알림 시각</b>
+┃ {now_str}
+┣ 💰 <b>현재 최저가</b>
+┃ {price_text}원
+┣ 📉 <b>최근 2주 최저가</b>
+┃ {lowest_price_str}원
+┃ ({lowest_time_str} 기준)
+┗━━━━━━━━━━━━━━━━━━━━━┛"""
             
-        # ----------------------------------------------------
-        
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
-        # 💡 알림 시각(현재 시각) 항목을 추가하여 메시지 포맷 수정
         if is_regular_report:
             return [
-                {"target": "regular", "text": f"📊 [정기 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"},
-                {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"}
+                {"target": "regular", "text": format_message("📊 [정기 브리핑]")},
+                {"target": "watch", "text": format_message("🔔 [수시 브리핑]")}
             ]
             
         return [
-            {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"}
+            {"target": "watch", "text": format_message("🔔 [수시 브리핑]")}
         ]
         
     except Exception as e:
@@ -109,7 +113,8 @@ def send_telegram(results):
             continue
             
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {'chat_id': chat_id, 'text': text}
+        # 💡 [핵심] parse_mode='HTML'을 추가하여 굵은 글씨(<b>) 태그가 적용되게 합니다.
+        payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}
         requests.post(url, data=payload)
 
 if __name__ == "__main__":
