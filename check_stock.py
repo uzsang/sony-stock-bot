@@ -41,6 +41,7 @@ def get_lowest_price():
         now_kst = datetime.utcnow() + timedelta(hours=9)
         now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
         
+        # 💡 모바일 가독성을 위해 현재 날짜와 시간을 분리
         current_date = now_kst.strftime('%Y-%m-%d')
         current_time = now_kst.strftime('%H:%M:%S')
         
@@ -55,6 +56,7 @@ def get_lowest_price():
         if history:
             lowest_item = min(history, key=lambda x: x['price'])
             lowest_price_str = lowest_item['text']
+            # 💡 최저가 기록 당시의 날짜와 시간을 분리
             lowest_date = lowest_item['timestamp'][:10]
             lowest_time = lowest_item['timestamp'][11:]
         else:
@@ -62,22 +64,22 @@ def get_lowest_price():
             lowest_date = current_date
             lowest_time = current_time
 
-        # 💡 [진짜 표 디자인] 텔레그램의 고정폭 폰트(<code>)를 활용하여 선이 어긋나지 않게 정렬
+        # 💡 [초슬림 표 디자인] 모든 행이 지정된 글자 수를 넘지 않도록 차례로 줄바꿈 처리
         def format_message(title):
             return f"""<b>{title}</b>
-<code>
- ────────┬──────────
-   항목  │ 상세정보
- ────────┼──────────
-  현재가 │ {price_text}원
-  시각   │ {current_date}
-         │ {current_time}
- ────────┼──────────
-  2주최저│ {lowest_price_str}원
-  기록일 │ {lowest_date}
-  기록시 │ {lowest_time}
- ────────┴──────────
-</code>"""
+───────────
+⏰ <b>알림 시각</b>
+  {current_date}
+  {current_time}
+───────────
+💰 <b>현재 최저가</b>
+  {price_text}원
+───────────
+📉 <b>2주 최저가</b>
+  {lowest_price_str}원
+  ({lowest_date})
+  ({lowest_time})
+───────────"""
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
