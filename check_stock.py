@@ -30,20 +30,26 @@ def get_lowest_price():
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
         if is_regular_report:
-            # 💡 두 방(regular, watch) 모두에게 전송
-            return {"targets": ["regular", "watch"], "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
+            # 💡 각각의 봇(방)에 다른 문구로 메시지를 보내도록 목록(리스트) 형태로 반환합니다.
+            return [
+                {"target": "regular", "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"},
+                {"target": "watch", "text": f"🔔 [수시 브리핑] 09J29360 현재 최저가: {price_text}원"}
+            ]
             
-        # 5분 감시 주기일 경우
-        # 💡 감시용 방(watch)에만 '수시 브리핑'으로 전송
-        return {"targets": ["watch"], "text": f"🔔 [수시 브리핑] 09J29360 현재 최저가: {price_text}원"}
+        # 5분 감시 주기일 경우 (수시 브리핑 방에만 전송)
+        return [
+            {"target": "watch", "text": f"🔔 [수시 브리핑] 09J29360 현재 최저가: {price_text}원"}
+        ]
         
     except Exception as e:
-        return {"targets": ["watch"], "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
+        return [
+            {"target": "watch", "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
+        ]
     finally:
         driver.quit()
 
-def send_telegram(result):
-    if result is None:
+def send_telegram(results):
+    if not results:
         return
         
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
@@ -51,7 +57,11 @@ def send_telegram(result):
         print("텔레그램 챗봇 ID가 누락되었습니다.")
         return
         
-    for target in result["targets"]:
+    # 전달받은 메시지 목록을 하나씩 꺼내서 알맞은 봇으로 전송합니다.
+    for item in results:
+        target = item["target"]
+        text = item["text"]
+        
         if target == "regular":
             token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
         else:
@@ -62,9 +72,9 @@ def send_telegram(result):
             continue
             
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {'chat_id': chat_id, 'text': result["text"]}
+        payload = {'chat_id': chat_id, 'text': text}
         requests.post(url, data=payload)
 
 if __name__ == "__main__":
-    result = get_lowest_price()
-    send_telegram(result)
+    results = get_lowest_price()
+    send_telegram(results)
