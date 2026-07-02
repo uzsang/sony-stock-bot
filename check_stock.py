@@ -30,10 +30,9 @@ def get_lowest_price():
         # 숫자가 아닌 문자 제거 (크기 비교용)
         clean_price = int(re.sub(r'[^0-9]', '', price_text))
         
-        # 💡 [가격 데이터베이스 로직]
+        # [가격 데이터베이스 로직]
         history_file = 'price_history.json'
         
-        # 파일이 있으면 읽어오고, 없거나 깨졌으면 빈 리스트로 시작 (자동 생성 보장)
         if os.path.exists(history_file):
             with open(history_file, 'r', encoding='utf-8') as f:
                 try: history = json.load(f)
@@ -41,42 +40,43 @@ def get_lowest_price():
         else:
             history = []
 
-        # 현재 시간 기록 (UTC 기준)
-        now = datetime.utcnow()
-        now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+        # 💡 현재 시간을 한국 시간(KST)으로 계산하여 기록 (%Y-%m-%d %H:%M:%S 형식)
+        now_kst = datetime.utcnow() + timedelta(hours=9)
+        now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
         
-        # 💡 [수정] 필터링 조건 제거: 실행될 때마다 무조건 기록을 누적합니다.
+        # 실행될 때마다 무조건 기록 누적
         history.append({'timestamp': now_str, 'price': clean_price, 'text': price_text})
         
-        # 💡 [수정] 보관 기간 연장: 14일(2주일)이 지난 과거 데이터만 자동으로 삭제합니다.
-        fourteen_days_ago = now - timedelta(days=14)
+        # 14일(2주일)이 지난 과거 데이터 자동 삭제
+        fourteen_days_ago = now_kst - timedelta(days=14)
         history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
         
-        # 데이터 정비 후 파일 저장
+        # 데이터 파일 저장
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
-        # 최근 2주일간의 최저가 탐색
+        # 최근 2주일간의 최저가 및 당시 날짜/시간 탐색
         if history:
             lowest_item = min(history, key=lambda x: x['price'])
-            record_date = lowest_item['timestamp'][:10]
-            biweekly_lowest_text = f"{lowest_item['text']}원 ({record_date} 기준)"
+            # 💡 날짜와 시간을 모두 포함하여 표시 (예: 148,000원 (2026-07-02 17:45:00))
+            biweekly_lowest_text = f"{lowest_item['text']}원 ({lowest_item['timestamp']})"
         else:
-            biweekly_lowest_text = f"{price_text}원"
+            biweekly_lowest_text = f"{price_text}원 ({now_str})"
             
         # ----------------------------------------------------
         
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
+        # 💡 알림 시각(현재 시각) 항목을 추가하여 메시지 포맷 수정
         if is_regular_report:
             return [
-                {"target": "regular", "text": f"📊 [정기 브리핑]\n• 현재 최저가: {price_text}원\n• 최근 2주간 최저가: {biweekly_lowest_text}"},
-                {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 현재 최저가: {price_text}원\n• 최근 2주간 최저가: {biweekly_lowest_text}"}
+                {"target": "regular", "text": f"📊 [정기 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"},
+                {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"}
             ]
             
         return [
-            {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 현재 최저가: {price_text}원\n• 최근 2주간 최저가: {biweekly_lowest_text}"}
+            {"target": "watch", "text": f"🔔 [수시 브리핑]\n• 알림 시각: {now_str}\n• 현재 최저가: {price_text}원\n• 최근 2주 최저가: {biweekly_lowest_text}"}
         ]
         
     except Exception as e:
