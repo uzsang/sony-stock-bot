@@ -41,6 +41,10 @@ def get_lowest_price():
         now_kst = datetime.utcnow() + timedelta(hours=9)
         now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
         
+        # 💡 모바일 가독성을 위해 현재 날짜와 시간을 분리
+        current_date = now_kst.strftime('%Y-%m-%d')
+        current_time = now_kst.strftime('%H:%M:%S')
+        
         history.append({'timestamp': now_str, 'price': clean_price, 'text': price_text})
         
         fourteen_days_ago = now_kst - timedelta(days=14)
@@ -52,23 +56,30 @@ def get_lowest_price():
         if history:
             lowest_item = min(history, key=lambda x: x['price'])
             lowest_price_str = lowest_item['text']
-            lowest_time_str = lowest_item['timestamp']
+            # 💡 최저가 기록 당시의 날짜와 시간을 분리
+            lowest_date = lowest_item['timestamp'][:10]
+            lowest_time = lowest_item['timestamp'][11:]
         else:
             lowest_price_str = price_text
-            lowest_time_str = now_str
+            lowest_date = current_date
+            lowest_time = current_time
 
-        # 💡 [디자인 적용] 메시지를 표(카드) 형태로 예쁘게 만들어주는 함수
+        # 💡 [초슬림 표 디자인] 모든 행이 지정된 글자 수를 넘지 않도록 차례로 줄바꿈 처리
         def format_message(title):
             return f"""<b>{title}</b>
-┏━━━━━━━━━━━━━━━━━━━━━┓
-┣ ⏰ <b>알림 시각</b>
-┃ {now_str}
-┣ 💰 <b>현재 최저가</b>
-┃ {price_text}원
-┣ 📉 <b>최근 2주 최저가</b>
-┃ {lowest_price_str}원
-┃ ({lowest_time_str} 기준)
-┗━━━━━━━━━━━━━━━━━━━━━┛"""
+───────────
+⏰ <b>알림 시각</b>
+  {current_date}
+  {current_time}
+───────────
+💰 <b>현재 최저가</b>
+  {price_text}원
+───────────
+📉 <b>2주 최저가</b>
+  {lowest_price_str}원
+  ({lowest_date})
+  ({lowest_time})
+───────────"""
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
@@ -85,7 +96,7 @@ def get_lowest_price():
         
     except Exception as e:
         return [
-            {"target": "watch", "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
+            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}"}
         ]
     finally:
         driver.quit()
@@ -113,7 +124,6 @@ def send_telegram(results):
             continue
             
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        # 💡 [핵심] parse_mode='HTML'을 추가하여 굵은 글씨(<b>) 태그가 적용되게 합니다.
         payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}
         requests.post(url, data=payload)
 
