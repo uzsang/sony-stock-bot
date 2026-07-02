@@ -30,15 +30,14 @@ def get_lowest_price():
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
         if is_regular_report:
-            # 💡 두 방(regular, watch) 모두에게 전송하도록 리스트로 지정
+            # 💡 두 방(regular, watch) 모두에게 전송
             return {"targets": ["regular", "watch"], "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
             
         # 5분 감시 주기일 경우
-        # 💡 감시용 방(watch)에만 전송하도록 지정
-        return {"targets": ["watch"], "text": f"🔔 [현재가 알림] 09J29360 현재 최저가: {price_text}원"}
+        # 💡 감시용 방(watch)에만 '수시 브리핑'으로 전송
+        return {"targets": ["watch"], "text": f"🔔 [수시 브리핑] 09J29360 현재 최저가: {price_text}원"}
         
     except Exception as e:
-        # 에러 발생 시 감시용 방으로만 알림
         return {"targets": ["watch"], "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
     finally:
         driver.quit()
@@ -52,7 +51,6 @@ def send_telegram(result):
         print("텔레그램 챗봇 ID가 누락되었습니다.")
         return
         
-    # 지정된 대상(targets) 수만큼 반복해서 각각의 봇으로 전송
     for target in result["targets"]:
         if target == "regular":
             token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
