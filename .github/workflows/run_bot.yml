@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 💡 깃허브 서버가 저장소에 파일(가격 기록)을 다시 쓸 수 있도록 권한을 부여합니다.
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -30,3 +33,13 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         CRON_TRIGGER: ${{ github.event.schedule }}
       run: python check_stock.py
+
+    # 💡 변동된 가격 기록 파일(price_history.json)이 있다면 자동으로 GitHub에 저장합니다.
+    # [skip ci]를 붙여서 푸시로 인해 매크로가 중복 실행되는 것을 방지합니다.
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add price_history.json
+        git commit -m "Update price history [skip ci]" || echo "No changes to commit"
+        git push
