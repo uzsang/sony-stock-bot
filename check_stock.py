@@ -30,13 +30,16 @@ def get_lowest_price():
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
         if is_regular_report:
-            return {"target": "regular", "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
+            # 💡 두 방(regular, watch) 모두에게 전송하도록 리스트로 지정
+            return {"targets": ["regular", "watch"], "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
             
-        # 5분 감시 주기일 경우 (조건 없이 항상 알림)
-        return {"target": "watch", "text": f"🔔 [현재가 알림] 09J29360 현재 최저가: {price_text}원"}
+        # 5분 감시 주기일 경우
+        # 💡 감시용 방(watch)에만 전송하도록 지정
+        return {"targets": ["watch"], "text": f"🔔 [현재가 알림] 09J29360 현재 최저가: {price_text}원"}
         
     except Exception as e:
-        return {"target": "watch", "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
+        # 에러 발생 시 감시용 방으로만 알림
+        return {"targets": ["watch"], "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
     finally:
         driver.quit()
 
@@ -44,22 +47,25 @@ def send_telegram(result):
     if result is None:
         return
         
-    # 목적지(채팅방)는 항상 회원님의 개인 ID 하나로 고정
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    
-    # 상황에 맞춰 봇(우체부) 선택
-    if result["target"] == "regular":
-        token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
-    else:
-        token = os.environ.get('TELEGRAM_TOKEN')
-    
-    if not token or not chat_id:
-        print("텔레그램 토큰이나 챗봇 ID가 누락되었습니다. Secrets 설정을 확인하세요.")
+    if not chat_id:
+        print("텔레그램 챗봇 ID가 누락되었습니다.")
         return
         
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {'chat_id': chat_id, 'text': result["text"]}
-    requests.post(url, data=payload)
+    # 지정된 대상(targets) 수만큼 반복해서 각각의 봇으로 전송
+    for target in result["targets"]:
+        if target == "regular":
+            token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
+        else:
+            token = os.environ.get('TELEGRAM_TOKEN')
+            
+        if not token:
+            print(f"[{target}] 봇 토큰이 누락되었습니다. Secrets 설정을 확인하세요.")
+            continue
+            
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {'chat_id': chat_id, 'text': result["text"]}
+        requests.post(url, data=payload)
 
 if __name__ == "__main__":
     result = get_lowest_price()
