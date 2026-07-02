@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 💡 깃허브 서버가 저장소에 파일(가격 기록)을 다시 쓸 수 있도록 권한을 부여합니다.
     permissions:
       contents: write
 
@@ -23,8 +22,9 @@ jobs:
         python-version: '3.9'
 
     - name: Install dependencies
+      # 💡 그래프 생성을 위한 matplotlib 라이브러리가 추가되었습니다.
       run: |
-        pip install selenium requests
+        pip install selenium requests matplotlib
 
     - name: Check Stock
       env:
@@ -34,9 +34,8 @@ jobs:
         CRON_TRIGGER: ${{ github.event.schedule }}
       run: python check_stock.py
 
-    # 💡 변동된 가격 기록 파일(price_history.json)이 있다면 자동으로 GitHub에 저장합니다.
-    # [skip ci]를 붙여서 푸시로 인해 매크로가 중복 실행되는 것을 방지합니다.
     - name: Commit and Push changes
+      # 💡 가격 변동 기록(DB)을 GitHub에 계속 누적 저장합니다.
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
