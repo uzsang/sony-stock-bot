@@ -2,9 +2,11 @@ name: Sony Stock Checker
 
 on:
   schedule:
-    # 매 5분마다 실행
+    # 1. 정기 알림 스케줄: 한국 시간 오전 9시(UTC 0시), 밤 9시(UTC 12시)
+    - cron: '0 0,12 * * *'
+    # 2. 조건부 감시 스케줄: 매 5분마다
     - cron: '*/5 * * * *'
-  workflow_dispatch:
+  workflow_dispatch: # 수동 실행 버튼
 
 jobs:
   build:
@@ -26,5 +28,7 @@ jobs:
     - name: Check Stock
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}          # 기존 방 (특가 감시용)
+        TELEGRAM_CHAT_ID_REGULAR: ${{ secrets.TELEGRAM_CHAT_ID_REGULAR }}  # 새 방 (정기 브리핑용)
+        CRON_TRIGGER: ${{ github.event.schedule }}
       run: python check_stock.py
