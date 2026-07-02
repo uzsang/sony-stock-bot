@@ -9,17 +9,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 💡 모바일 화면에서 한글과 영문/숫자의 폭을 계산하여 표 테두리를 고정하는 함수
-def pad_text(text, width):
-    current_width = 0
-    for char in text:
-        # 한글 범위 체크 (한글은 2칸, 나머지는 1칸 차지)
-        if '\uac00' <= char <= '\ud7a3' or '\u1100' <= char <= '\u11ff' or '\u3130' <= char <= '\u318f':
-            current_width += 2
-        else:
-            current_width += 1
-    return text + ' ' * (width - current_width)
-
 def get_lowest_price():
     url = "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
 
@@ -73,36 +62,21 @@ def get_lowest_price():
             lowest_date = current_date
             lowest_time = current_time
 
-        # 💡 [ㄱ, └ 형태로 사방을 닫은 완성형 표 디자인]
+        # 💡 [진짜 표 디자인] 텔레그램의 고정폭 폰트(<code>)를 활용하여 선이 어긋나지 않게 정렬
         def format_message(title):
-            col1 = 9  # 왼쪽 항목 컬럼 너비
-            col2 = 14 # 오른쪽 상세정보 컬럼 너비
-            
-            sep_top = "┌" + "─" * col1 + "┬" + "─" * col2 + "┐"
-            sep_mid = "├" + "─" * col1 + "┼" + "─" * col2 + "┤"
-            sep_bot = "└" + "─" * col1 + "┴" + "─" * col2 + "┘"
-            
-            r_head = f"│{pad_text('   항목', col1)}│{pad_text(' 상세정보', col2)}│"
-            r_curr = f"│{pad_text('  현재가', col1)}│{pad_text(f' {price_text}원', col2)}│"
-            r_date = f"│{pad_text('  시각', col1)}│{pad_text(f' {current_date}', col2)}│"
-            r_time = f"│{pad_text('', col1)}│{pad_text(f' {current_time}', col2)}│"
-            r_low  = f"│{pad_text('  2주최저', col1)}│{pad_text(f' {lowest_price_str}원', col2)}│"
-            r_ldat = f"│{pad_text('  기록일', col1)}│{pad_text(f' {lowest_date}', col2)}│"
-            r_ltim = f"│{pad_text('  기록시', col1)}│{pad_text(f' {lowest_time}', col2)}│"
-            
             return f"""<b>{title}</b>
 <code>
-{sep_top}
-{r_head}
-{sep_mid}
-{r_curr}
-{r_date}
-{r_time}
-{sep_mid}
-{r_low}
-{r_ldat}
-{r_ltim}
-{sep_bot}
+ ────────┬──────────
+   항목  │ 상세정보
+ ────────┼──────────
+  현재가 │ {price_text}원
+  시각   │ {current_date}
+         │ {current_time}
+ ────────┼──────────
+  2주최저│ {lowest_price_str}원
+  기록일 │ {lowest_date}
+  기록시 │ {lowest_time}
+ ────────┴──────────
 </code>"""
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
@@ -126,7 +100,7 @@ def get_lowest_price():
         driver.quit()
 
 def send_telegram(results):
-    if not Jack or not results:
+    if not results:
         return
         
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
