@@ -1,5 +1,4 @@
 import os
-import re
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -25,7 +24,6 @@ def get_lowest_price():
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
         
-        clean_price = int(re.sub(r'[^0-9]', '', price_text))
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         
         # 아침 9시 / 밤 9시 정기 브리핑이거나 수동 실행일 경우
@@ -34,12 +32,8 @@ def get_lowest_price():
         if is_regular_report:
             return {"target": "regular", "text": f"📊 [정기 브리핑] 09J29360 현재 최저가: {price_text}원"}
             
-        # 5분 감시 주기일 경우 (15만 원 미만일 때만)
-        if clean_price < 150000:
-            return {"target": "watch", "text": f"🚨 [특가 달성!] 09J29360 최저가가 15만 원 미만입니다!\n현재 최저가: {price_text}원"}
-        else:
-            print(f"현재 가격이 {price_text}원이라서 알림을 건너뜁니다. (5분 감시 중)")
-            return None
+        # 5분 감시 주기일 경우 (조건 없이 항상 알림)
+        return {"target": "watch", "text": f"🔔 [현재가 알림] 09J29360 현재 최저가: {price_text}원"}
         
     except Exception as e:
         return {"target": "watch", "text": f"⚠️ 가격 조회 실패. 에러 내용: {e}"}
@@ -53,7 +47,7 @@ def send_telegram(result):
     # 목적지(채팅방)는 항상 회원님의 개인 ID 하나로 고정
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
     
-    # 💡 전달할 봇(우체부)을 상황에 맞춰 선택
+    # 상황에 맞춰 봇(우체부) 선택
     if result["target"] == "regular":
         token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
     else:
