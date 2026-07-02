@@ -38,10 +38,16 @@ def get_lowest_price():
         else:
             history = []
 
+        # 💡 [신규 로직] 현재 가격을 기록하기 전에, 이전 2주 기록과 비교하여 최저가 갱신 여부 확인
+        is_new_record = False
+        if history:
+            prev_lowest_item = min(history, key=lambda x: x['price'])
+            if clean_price < prev_lowest_item['price']:
+                is_new_record = True
+
         now_kst = datetime.utcnow() + timedelta(hours=9)
         now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
         
-        # 💡 모바일 가독성을 위해 현재 날짜와 시간을 분리
         current_date = now_kst.strftime('%Y-%m-%d')
         current_time = now_kst.strftime('%H:%M:%S')
         
@@ -56,7 +62,6 @@ def get_lowest_price():
         if history:
             lowest_item = min(history, key=lambda x: x['price'])
             lowest_price_str = lowest_item['text']
-            # 💡 최저가 기록 당시의 날짜와 시간을 분리
             lowest_date = lowest_item['timestamp'][:10]
             lowest_time = lowest_item['timestamp'][11:]
         else:
@@ -64,9 +69,14 @@ def get_lowest_price():
             lowest_date = current_date
             lowest_time = current_time
 
-        # 💡 [초슬림 표 디자인] 모든 행이 지정된 글자 수를 넘지 않도록 차례로 줄바꿈 처리
+        # 💡 [디자인] 최저가 갱신 시 폭탄이 터지는 강렬한 헤더 추가
         def format_message(title):
-            return f"""<b>{title}</b>
+            if is_new_record:
+                header = f"💥💣 <b>[역대급 최저가 갱신!!]</b> 💣💥\n<b>{title}</b>"
+            else:
+                header = f"<b>{title}</b>"
+
+            return f"""{header}
 ───────────
 ⏰ <b>알림 시각</b>
   {current_date}
