@@ -41,16 +41,19 @@ def draw_graph(history):
     line_color = '#4361ee'
     plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, markersize=8, markerfacecolor='#ffffff', markeredgewidth=2)
     
-    y_min = min(sorted_prices)
     y_max = max(sorted_prices)
-    if y_min == y_max:
-        plt.ylim(y_min * 0.9, y_min * 1.1)
-        fill_base = y_min * 0.9
-    else:
-        plt.ylim(y_min - (y_max - y_min) * 0.15, y_max + (y_max - y_min) * 0.25)
-        fill_base = y_min - (y_max - y_min) * 0.15
-        
-    plt.fill_between(dates, sorted_prices, fill_base, color=line_color, alpha=0.1)
+    
+    # 💡 [요청 사항 반영] Y축 최솟값을 10만원으로 고정하고, 목표가(15만원)가 잘 보이도록 최댓값 설정
+    top_limit = max(y_max * 1.05, 155000)
+    plt.ylim(100000, top_limit)
+    
+    # 그래프 아래 반투명 색상 채우기
+    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.1)
+    
+    # 💡 [요청 사항 반영] 15만 원 위치에 목표가 빨간색 점선 및 라벨 추가
+    target_price = 150000
+    plt.axhline(y=target_price, color='#FF4B4B', linestyle='--', linewidth=2, alpha=0.8)
+    plt.text(dates[0], target_price + 1500, 'Target (150,000)', color='#FF4B4B', fontweight='bold', fontsize=10)
     
     for i, txt in enumerate(sorted_prices):
         plt.annotate(f"{txt:,}", (dates[i], sorted_prices[i]), 
@@ -86,9 +89,8 @@ def get_lowest_price():
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
         
-        # 💡 [신규 로직] 최저가 판매 페이지 링크 추출
+        # 최저가 구매 URL 추출
         try:
-            # price_sect 내부 혹은 바로 위 부모에 걸려 있는 쇼핑몰 이동 링크 추출
             link_element = driver.find_element(By.CSS_SELECTOR, "p.price_sect a")
             buy_url = link_element.get_attribute('href')
         except:
@@ -96,144 +98,6 @@ def get_lowest_price():
                 link_element = price_element.find_element(By.XPATH, "./ancestor::a")
                 buy_url = link_element.get_attribute('href')
             except:
-                buy_url = TARGET_URL # 추출 실패 시 기존 다나와 주소로 백업
-        
-        clean_price = int(re.sub(r'[^0-9]', '', price_text))
-        
-        history_file = 'price_history.json'
-        
-        if os.path.exists(history_file):
-            with open(history_file, 'r', encoding='utf-8') as f:
-                try: history = json.load(f)
-                except: history = []
-        else:
-            history = []
-
-        is_new_record = False
-        if history:
-            prev_lowest_item = min(history, key=lambda x: x['price'])
-            if clean_price < prev_lowest_item['price']:
-                is_new_record = True
-
-        now_kst = datetime.utcnow() + timedelta(hours=9)
-        now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
-        
-        current_date = now_kst.strftime('%Y-%m-%d')
-        current_time = now_kst.strftime('%H:%M:%S')
-        
-        history.append({'timestamp': now_str, 'price': clean_price, 'text': price_text})
-        
-        fourteen_days_ago = now_kst - timedelta(days=14)
-        history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
-        
-        with open(history_file, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-            
-        if history:
-            lowest_item = min(history, key=lambda x: x['price'])
-            lowest_price_str = lowest_item['text']
-            lowest_date = lowest_item['timestamp'][:10]
-            lowest_time = lowest_item['timestamp'][11:]
-        else:
-            lowest_price_str = price_text
-            lowest_date = current_date
-            lowest_time = current_time
-
-        graph_file = draw_graph(history)
-
-        def format_message(title):
-            if is_new_record:
-                header = f"💥💣 <b>[역대급 최저가 갱신!!]</b> 💣💥\n<b>{title}</b>"
-            else:
-                header = f"<b>{title}</b>"
-
-            return f"""{header}
-───────────
-⏰ <b>알림 시각</b>
-  {current_date}
-  {current_time}
-───────────
-💰 <b>현재 최저가</b>
-  {price_text}원
-───────────
-📉 <b>2주 최저가</b>
-  {lowest_price_str}원
-  ({lowest_date})
-  ({lowest_time})
-───────────"""
-            
-        cron_trigger = os.environ.get('CRON_TRIGGER', '')
-        is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
-        
-        # 💡 각 메시지 데이터 셋에 실시간 추출된 buy_url을 포함하여 반환합니다.
-        if is_regular_report:
-            return [
-                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "buy_url": buy_url},
-                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
-            ]
-            
-        return [
-            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
-        ]
-        
-    except Exception as e:
-        return [
-            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "buy_url": TARGET_URL}
-        ]
-    finally:
-        driver.quit()
-
-def send_telegram(results):
-    if not results:
-        return
-        
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    if not chat_id:
-        print("텔레그램 챗봇 ID가 누락되었습니다.")
-        return
-        
-    for item in results:
-        target = item["target"]
-        text = item["text"]
-        graph_file = item.get("graph")
-        buy_url = item.get("buy_url", TARGET_URL) # 💡 개별 추출된 판매 페이지 주소 가져오기
-        
-        # 💡 각 아이템의 실제 판매처 주소로 인라인 버튼 생성
-        reply_markup = {
-            "inline_keyboard": [
-                [{"text": "🛒 최저가 판매처로 바로가기", "url": buy_url}]
-            ]
-        }
-        
-        if target == "regular":
-            token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
-        else:
-            token = os.environ.get('TELEGRAM_TOKEN')
-            
-        if not token:
-            print(f"[{target}] 봇 토큰이 누락되었습니다.")
-            continue
-            
-        if graph_file and os.path.exists(graph_file):
-            url = f"https://api.telegram.org/bot{token}/sendPhoto"
-            data = {
-                'chat_id': chat_id,
-                'caption': text,
-                'parse_mode': 'HTML',
-                'reply_markup': json.dumps(reply_markup) 
-            }
-            with open(graph_file, 'rb') as f:
-                requests.post(url, data=data, files={'photo': f})
-        else:
-            url = f"https://api.telegram.org/bot{token}/sendMessage"
-            data = {
-                'chat_id': chat_id,
-                'text': text,
-                'parse_mode': 'HTML',
-                'reply_markup': json.dumps(reply_markup)
-            }
-            requests.post(url, data=data)
-
-if __name__ == "__main__":
-    results = get_lowest_price()
-    send_telegram(results)
+                buy_url = TARGET_URL
+                
+        # 💡 [요청 사항 반영
