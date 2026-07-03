@@ -75,7 +75,6 @@ def get_lowest_price():
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    # 바로 아래 줄이 에러가 났던 긴 문장입니다!
     options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
     driver = webdriver.Chrome(options=options)
@@ -86,6 +85,18 @@ def get_lowest_price():
         
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
+        
+        # 💡 [신규 로직] 최저가 판매 페이지 링크 추출
+        try:
+            # price_sect 내부 혹은 바로 위 부모에 걸려 있는 쇼핑몰 이동 링크 추출
+            link_element = driver.find_element(By.CSS_SELECTOR, "p.price_sect a")
+            buy_url = link_element.get_attribute('href')
+        except:
+            try:
+                link_element = price_element.find_element(By.XPATH, "./ancestor::a")
+                buy_url = link_element.get_attribute('href')
+            except:
+                buy_url = TARGET_URL # 추출 실패 시 기존 다나와 주소로 백업
         
         clean_price = int(re.sub(r'[^0-9]', '', price_text))
         
@@ -154,19 +165,20 @@ def get_lowest_price():
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
+        # 💡 각 메시지 데이터 셋에 실시간 추출된 buy_url을 포함하여 반환합니다.
         if is_regular_report:
             return [
-                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file},
-                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file}
+                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "buy_url": buy_url},
+                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
             ]
             
         return [
-            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file}
+            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
         ]
         
     except Exception as e:
         return [
-            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None}
+            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "buy_url": TARGET_URL}
         ]
     finally:
         driver.quit()
@@ -180,16 +192,18 @@ def send_telegram(results):
         print("텔레그램 챗봇 ID가 누락되었습니다.")
         return
         
-    reply_markup = {
-        "inline_keyboard": [
-            [{"text": "🛒 다나와 구매하러 가기", "url": TARGET_URL}]
-        ]
-    }
-        
     for item in results:
         target = item["target"]
         text = item["text"]
         graph_file = item.get("graph")
+        buy_url = item.get("buy_url", TARGET_URL) # 💡 개별 추출된 판매 페이지 주소 가져오기
+        
+        # 💡 각 아이템의 실제 판매처 주소로 인라인 버튼 생성
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": "🛒 최저가 판매처로 바로가기", "url": buy_url}]
+            ]
+        }
         
         if target == "regular":
             token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
