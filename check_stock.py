@@ -30,64 +30,45 @@ def draw_graph(history):
     sorted_prices = [daily_min[d] for d in sorted_dates]
     dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
     
-    # 💡 [애플/구글 미니멀리즘 팔레트]
-    bg_color = '#ffffff'       # 순백색 배경
-    text_color = '#1d1d1f'     # 애플 특유의 진한 차콜 텍스트
-    grid_color = '#e5e5ea'     # 아주 연한 회색 그리드
-    line_color = '#007aff'     # 애플 샌프란시스코 블루
-    target_color = '#ff3b30'   # 애플 경고 레드
-
-    fig, ax = plt.subplots(figsize=(10, 5), facecolor=bg_color)
-    ax.set_facecolor(bg_color)
+    plt.figure(figsize=(9, 5))
+    ax = plt.gca()
     
-    # 불필요한 사방 테두리 완벽히 제거
-    for spine in ax.spines.values():
-        spine.set_visible(False)
+    ax.set_facecolor('#f8f9fa')
+    plt.gcf().patch.set_facecolor('#ffffff')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#dddddd')
+    ax.spines['bottom'].set_color('#dddddd')
     
-    # 세로선 없이 가로선만 얇고 연하게 배치 (데이터를 방해하지 않음)
-    ax.grid(axis='y', color=grid_color, linestyle='-', linewidth=1)
-    ax.set_axisbelow(True)
-    
-    # 눈금(Tick) 튀어나온 선 제거, 글자 색상 은은하게 처리
-    ax.tick_params(axis='both', which='both', length=0, labelsize=10, colors='#86868b')
-    
-    # 매우 굵고 선명한 메인 라인 (끝부분을 둥글게 처리하여 세련미 강조)
-    plt.plot(dates, sorted_prices, color=line_color, linewidth=4, solid_capstyle='round')
-    
-    # 포인트 마커: 크고 깔끔한 흰색 바탕에 파란 테두리
-    plt.plot(dates, sorted_prices, 'o', color=line_color, markersize=9, markerfacecolor='#ffffff', markeredgewidth=2.5)
+    line_color = '#4361ee'
+    plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, markersize=8, markerfacecolor='#ffffff', markeredgewidth=2)
     
     y_max = max(sorted_prices)
     top_limit = max(y_max * 1.05, 155000)
     plt.ylim(100000, top_limit)
     
-    # 바닥면 채우기 (아주 옅은 블루로 여백의 미 강조)
-    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.04)
+    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.1)
     
-    # 목표가 선: 심플한 점선
     target_price = 150000
-    plt.axhline(y=target_price, color=target_color, linestyle='--', linewidth=1.5, dashes=(4, 4))
-    plt.text(dates[0], target_price + 1200, ' Target 150,000', color=target_color, fontweight='bold', fontsize=10, va='bottom')
+    plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
+    plt.text(dates[0], target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
     
-    # 미니멀리즘을 위해 'won'을 제거하고 심플하게 콤마 숫자만 표시
     for i, txt in enumerate(sorted_prices):
-        plt.annotate(f"{txt:,}", (dates[i], sorted_prices[i]), 
-                     textcoords="offset points", xytext=(0, 14), 
-                     ha='center', fontsize=11, fontweight='bold', color=text_color)
+        plt.annotate(f"{txt:,} won", (dates[i], sorted_prices[i]), 
+                     textcoords="offset points", xytext=(0, 10), 
+                     ha='center', fontsize=10, fontweight='bold', color='#333333')
     
-    # 발표 화면처럼 여백이 있는 크고 깔끔한 좌측 정렬 타이틀
-    plt.title('Price Trend', fontsize=20, fontweight='bold', pad=25, color=text_color, loc='left')
+    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
+    plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-    # 날짜도 심플하게 슬래시(/) 형태 사용 (예: 07/02)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m/%d'))
-    plt.xticks(dates)
     
-    # 레이아웃 여백 자동 최적화
-    plt.tight_layout()
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+    plt.xticks(dates, rotation=45, color='#6c757d')
     
     graph_path = 'price_graph.png'
-    plt.savefig(graph_path, bbox_inches='tight', dpi=200, facecolor=bg_color) 
+    plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
     plt.close()
     
     return graph_path
