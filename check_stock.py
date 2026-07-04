@@ -44,19 +44,15 @@ def draw_graph(history):
     
     y_max = max(sorted_prices)
     
-    # Y축 최솟값을 10만원으로 고정, 목표가(15만원)가 잘 보이도록 최댓값 설정
     top_limit = max(y_max * 1.05, 155000)
     plt.ylim(100000, top_limit)
     
-    # 그래프 아래 반투명 색상 채우기
     plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.1)
     
-    # 💡 [변경] 15만 원 위치에 목표가 빨간색 '실선(linestyle='-')' 추가
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     plt.text(dates[0], target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
     
-    # 💡 [변경] 점 위의 가격 라벨에 'won' 추가
     for i, txt in enumerate(sorted_prices):
         plt.annotate(f"{txt:,} won", (dates[i], sorted_prices[i]), 
                      textcoords="offset points", xytext=(0, 10), 
@@ -66,7 +62,6 @@ def draw_graph(history):
     plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     
-    # 💡 [변경] Y축 가격 숫자에 천 단위 쉼표(,) 추가
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
@@ -94,31 +89,44 @@ def get_lowest_price():
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
         
-        # 최저가 구매 URL 추출
-        try:
-            link_element = driver.find_element(By.CSS_SELECTOR, "p.price_sect a")
-            buy_url = link_element.get_attribute('href')
-        except:
-            try:
-                link_element = price_element.find_element(By.XPATH, "./ancestor::a")
-                buy_url = link_element.get_attribute('href')
-            except:
-                buy_url = TARGET_URL
-                
-        # 쇼핑몰 이름 추출
+        # 💡 [정밀도 향상] 다나와 가격비교 리스트 내부까지 파고들어 쇼핑몰 이름과 링크 추출
+        buy_url = TARGET_URL
+        mall_name = "다나와 가격비교"
+        
         try:
             li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
+            
+            # 1. 쇼핑몰 이름 찾기 (가격비교 내부 리스트의 첫 번째 항목 OR 단일 상품 몰 로고)
             try:
-                mall_img = li_parent.find_element(By.CSS_SELECTOR, ".mall_area img")
+                mall_img = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child .mall_name img, .mall_area img")
                 mall_name = mall_img.get_attribute("alt").strip()
             except:
-                mall_txt = li_parent.find_element(By.CSS_SELECTOR, ".mall_area")
-                mall_name = mall_txt.text.strip()
-            
+                try:
+                    mall_txt = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child .mall_name, .mall_area")
+                    mall_name = mall_txt.text.strip()
+                except:
+                    pass
+                    
             if not mall_name:
-                mall_name = "최저가 판매처"
-        except:
-            mall_name = "최저가 판매처"
+                mall_name = "다나와 가격비교"
+
+            # 2. 직통 링크 찾기
+            try:
+                # 가격비교 리스트 최상단 쇼핑몰 직통 링크를 먼저 시도
+                link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
+                extracted_url = link_el.get_attribute("href")
+                if extracted_url and "javascript" not in extracted_url:
+                    buy_url = extracted_url
+                else:
+                    buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+            except:
+                try:
+                    buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"정보 추출 한계: {e}")
         
         clean_price = int(re.sub(r'[^0-9]', '', price_text))
         
