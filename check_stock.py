@@ -2,9 +2,11 @@ import os
 import re
 import json
 import requests
+import urllib.request
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
+import matplotlib.font_manager as fm
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -18,15 +20,33 @@ def draw_graph(history):
     if not history:
         return None
         
+    # 💡 [한글 폰트 자동 적용] 깃허브 서버에서 한글이 깨지지 않도록 나눔고딕 폰트 적용
+    font_path = 'NanumGothic.ttf'
+    if not os.path.exists(font_path):
+        try:
+            font_url = 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf'
+            urllib.request.urlretrieve(font_url, font_path)
+        except Exception as e:
+            print(f"폰트 다운로드 실패: {e}")
+            
+    if os.path.exists(font_path):
+        fm.fontManager.addfont(font_path)
+        plt.rc('font', family='NanumGothic')
+        
     daily_min = {}
     for item in history:
         date_str = item['timestamp'][:10]
         price = item['price']
-        if date_str not in daily_min or price < daily_min[date_str]:
-            daily_min[date_str] = price
+        # 기존 기록에 mall_name이 없을 경우를 대비한 예외 처리
+        mall = item.get('mall_name', '') 
+        
+        # 해당 날짜의 최저가이거나 첫 기록일 경우 가격과 쇼핑몰 이름 갱신
+        if date_str not in daily_min or price < daily_min[date_str]['price']:
+            daily_min[date_str] = {'price': price, 'mall_name': mall}
             
     sorted_dates = sorted(daily_min.keys())
-    sorted_prices = [daily_min[d] for d in sorted_dates]
+    sorted_prices = [daily_min[d]['price'] for d in sorted_dates]
+    sorted_malls = [daily_min[d]['mall_name'] for d in sorted_dates]
     dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
     
     plt.figure(figsize=(9, 5))
@@ -43,7 +63,6 @@ def draw_graph(history):
     plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, markersize=8, markerfacecolor='#ffffff', markeredgewidth=2)
     
     y_max = max(sorted_prices)
-    
     top_limit = max(y_max * 1.05, 155000)
     plt.ylim(100000, top_limit)
     
@@ -53,10 +72,16 @@ def draw_graph(history):
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     plt.text(dates[0], target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
     
+    # 💡 [그래프 수정] 숫자 라벨 아래에 쇼핑몰 이름 추가
     for i, txt in enumerate(sorted_prices):
-        plt.annotate(f"{txt:,} won", (dates[i], sorted_prices[i]), 
-                     textcoords="offset points", xytext=(0, 10), 
-                     ha='center', fontsize=10, fontweight='bold', color='#333333')
+        mall_text = sorted_malls[i]
+        label = f"{txt:,} won"
+        if mall_text:
+            label += f"\n({mall_text})"
+            
+        plt.annotate(label, (dates[i], sorted_prices[i]), 
+                     textcoords="offset points", xytext=(0, 12), 
+                     ha='center', fontsize=9, fontweight='bold', color='#333333')
     
     plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
     plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
@@ -89,14 +114,12 @@ def get_lowest_price():
         price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
         price_text = price_element.text
         
-        # 💡 [정밀도 향상] 다나와 가격비교 리스트 내부까지 파고들어 쇼핑몰 이름과 링크 추출
         buy_url = TARGET_URL
-        mall_name = "다나와 가격비교"
+        mall_name = "다나와"
         
         try:
             li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
             
-            # 1. 쇼핑몰 이름 찾기 (가격비교 내부 리스트의 첫 번째 항목 OR 단일 상품 몰 로고)
             try:
                 mall_img = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child .mall_name img, .mall_area img")
                 mall_name = mall_img.get_attribute("alt").strip()
@@ -108,11 +131,9 @@ def get_lowest_price():
                     pass
                     
             if not mall_name:
-                mall_name = "다나와 가격비교"
+                mall_name = "다나와"
 
-            # 2. 직통 링크 찾기
             try:
-                # 가격비교 리스트 최상단 쇼핑몰 직통 링크를 먼저 시도
                 link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
                 extracted_url = link_el.get_attribute("href")
                 if extracted_url and "javascript" not in extracted_url:
@@ -151,7 +172,13 @@ def get_lowest_price():
         current_date = now_kst.strftime('%Y-%m-%d')
         current_time = now_kst.strftime('%H:%M:%S')
         
-        history.append({'timestamp': now_str, 'price': clean_price, 'text': price_text})
+        # 💡 [DB 수정] price_history.json 파일에 mall_name(쇼핑몰 이름) 데이터도 함께 저장
+        history.append({
+            'timestamp': now_str, 
+            'price': clean_price, 
+            'text': price_text, 
+            'mall_name': mall_name
+        })
         
         fourteen_days_ago = now_kst - timedelta(days=14)
         history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
@@ -164,10 +191,13 @@ def get_lowest_price():
             lowest_price_str = lowest_item['text']
             lowest_date = lowest_item['timestamp'][:10]
             lowest_time = lowest_item['timestamp'][11:]
+            # 💡 [메시지용] 2주 최저가를 달성했던 당시의 쇼핑몰 이름 가져오기
+            lowest_mall = lowest_item.get('mall_name', '기록없음')
         else:
             lowest_price_str = price_text
             lowest_date = current_date
             lowest_time = current_time
+            lowest_mall = mall_name
 
         graph_file = draw_graph(history)
 
@@ -189,6 +219,7 @@ def get_lowest_price():
 ───────────
 📉 <b>2주 최저가</b>
   {lowest_price_str}원
+  ({lowest_mall})
   ({lowest_date})
   ({lowest_time})
 ───────────"""
