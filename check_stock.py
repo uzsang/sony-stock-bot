@@ -30,45 +30,66 @@ def draw_graph(history):
     sorted_prices = [daily_min[d] for d in sorted_dates]
     dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
     
-    plt.figure(figsize=(9, 5))
+    # 💡 [프리미엄 다크 모드 색상 팔레트]
+    bg_color = '#18181b'       # 전체 배경색 (고급스러운 다크 그레이)
+    panel_color = '#27272a'    # 패널 색상
+    text_color = '#e4e4e7'     # 텍스트 색상 (밝은 회색)
+    grid_color = '#3f3f46'     # 그리드 선 색상
+    line_color = '#22d3ee'     # 메인 그래프 선 (네온 시안)
+    target_color = '#f43f5e'   # 목표가 선 (네온 로즈/레드)
+
+    plt.figure(figsize=(10, 5), facecolor=bg_color)
     ax = plt.gca()
+    ax.set_facecolor(bg_color)
     
-    ax.set_facecolor('#f8f9fa')
-    plt.gcf().patch.set_facecolor('#ffffff')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('#dddddd')
-    ax.spines['bottom'].set_color('#dddddd')
+    # 테두리 제거 (모던한 느낌)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
     
-    line_color = '#4361ee'
-    plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, markersize=8, markerfacecolor='#ffffff', markeredgewidth=2)
+    # 가로 그리드 은은하게 추가
+    plt.grid(axis='y', color=grid_color, linestyle='--', linewidth=0.7, alpha=0.5)
+    
+    # 💡 선에 은은하게 빛나는 글로우(Glow) 효과 주기
+    for n in range(1, 4):
+        plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2+(n*2), alpha=0.1)
+        
+    # 메인 라인 그리기
+    plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
+             markersize=7, markerfacecolor=bg_color, markeredgecolor=line_color, markeredgewidth=2.5)
     
     y_max = max(sorted_prices)
     top_limit = max(y_max * 1.05, 155000)
     plt.ylim(100000, top_limit)
     
-    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.1)
+    # 선 아래쪽 은은한 그라데이션(투명도) 채우기
+    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.08)
     
+    # 목표가 빨간 실선 (세련된 레드)
     target_price = 150000
-    plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
-    plt.text(dates[0], target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
+    plt.axhline(y=target_price, color=target_color, linestyle='-', linewidth=1.5, alpha=0.8)
+    # 목표가 텍스트 위치 및 스타일 조정
+    plt.text(dates[0], target_price + 1500, ' TARGET (150,000 won)', color=target_color, fontweight='900', fontsize=10)
     
+    # 💡 가격 텍스트를 말풍선(Badge) 스타일로 예쁘게 표시
     for i, txt in enumerate(sorted_prices):
+        bbox_props = dict(boxstyle="round,pad=0.4", fc=panel_color, ec=grid_color, lw=1, alpha=0.9)
         plt.annotate(f"{txt:,} won", (dates[i], sorted_prices[i]), 
-                     textcoords="offset points", xytext=(0, 10), 
-                     ha='center', fontsize=10, fontweight='bold', color='#333333')
+                     textcoords="offset points", xytext=(0, 15), 
+                     ha='center', fontsize=9, fontweight='bold', color=text_color, bbox=bbox_props)
     
-    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
-    plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
-    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    # 타이틀 및 축 폰트 색상 다크모드에 맞게 변경
+    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=15, fontweight='900', pad=20, color='#ffffff', loc='left')
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-    
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.xticks(dates, rotation=45, color='#6c757d')
+    
+    # X축, Y축 눈금 색상 변경
+    ax.tick_params(colors=text_color, which='both')
+    plt.xticks(dates, rotation=45)
     
     graph_path = 'price_graph.png'
-    plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
+    # 고화질(dpi=200)로 저장하여 모바일 확대 시에도 깨지지 않게 설정
+    plt.savefig(graph_path, bbox_inches='tight', dpi=200, facecolor=bg_color) 
     plt.close()
     
     return graph_path
