@@ -85,7 +85,7 @@ def draw_graph(history):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
-    plt.legend(loc='upper left', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
+    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
