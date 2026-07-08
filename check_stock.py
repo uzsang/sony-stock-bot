@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 💡 모니터링할 아이템 이름과 다나와 주소 정의
+# 모니터링할 아이템 이름과 다나와 주소 정의
 ITEMS_INFO = {
     "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
@@ -32,12 +32,11 @@ def draw_graph(history):
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
     
-    # 💡 두 제품의 그래프 선 색상 다르게 지정 (daypack: 블루, allday: 오렌지)
+    # 두 제품의 그래프 선 색상 다르게 지정 (daypack: 블루, allday: 오렌지)
     colors = {"daypack": "#4361ee", "allday": "#f97316"}
     all_prices = []
     
     for item_name, line_color in colors.items():
-        # 기존에 item 키가 없던 구데이터는 전부 'daypack'으로 간주하여 호환성 유지
         item_history = [x for x in history if x.get('item', 'daypack') == item_name]
         if not item_history:
             continue
@@ -55,26 +54,28 @@ def draw_graph(history):
         
         all_prices.extend(sorted_prices)
         
-        # 각 상품별 선 그래프 그리기
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name)
         
-        # 💡 숫자가 겹치지 않도록 daypack은 위로, allday는 아래로 텍스트 위치 분산 조정
         xy_offset = (0, 10) if item_name == "daypack" else (0, -18)
         for i, txt in enumerate(sorted_prices):
             plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=9, fontweight='bold', color='#333333')
     
-    # Y축 범위 최솟값 100,000원 고정
     y_max = max(all_prices) if all_prices else 150000
     top_limit = max(y_max * 1.05, 160000)
     plt.ylim(100000, top_limit)
     
-    # 💡 15만 원 위치에 공통 목표가 빨간 실선 및 라벨 추가
+    # 목표가 빨간 실선
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
-    plt.text(mdates.date2num(datetime.now() - timedelta(days=13)), target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
+    
+    # 💡 [핵심 수정] 글자 위치를 데이터 날짜 기준이 아닌, '그래프 화면 자체'의 좌측 2% 지점으로 영구 고정
+    # y좌표는 타겟 가격 + 1000원 위치에 두고, 텍스트 하단(va='bottom')이 오도록 설정하여 선 바로 위에 안착시킵니다.
+    ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
+            color='#FF4B4B', fontweight='bold', fontsize=10, 
+            va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
     plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
@@ -84,7 +85,6 @@ def draw_graph(history):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
-    # 💡 [요청 사항 반영] 그래프 내부에 범례 배치
     plt.legend(loc='upper left', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
     
     graph_path = 'price_graph.png'
@@ -119,7 +119,6 @@ def get_lowest_price():
     new_records_triggered = []
     
     try:
-        # 두 제품 순회하며 크롤링 진행
         for item_name, url in ITEMS_INFO.items():
             driver.get(url)
             wait = WebDriverWait(driver, 10)
@@ -128,7 +127,6 @@ def get_lowest_price():
             price_text = price_element.text
             clean_price = int(re.sub(r'[^0-9]', '', price_text))
             
-            # 최저가 링크 추출
             buy_url = url
             try:
                 li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
@@ -144,7 +142,6 @@ def get_lowest_price():
             except:
                 pass
             
-            # 각 아이템별 독립적인 최저가 갱신 여부 체크
             item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             is_new_record = False
             if item_history:
@@ -153,7 +150,6 @@ def get_lowest_price():
                     is_new_record = True
                     new_records_triggered.append(item_name)
             
-            # 데이터 적재
             history.append({
                 'item': item_name,
                 'timestamp': now_str, 
@@ -161,7 +157,6 @@ def get_lowest_price():
                 'text': price_text
             })
             
-            # 2주간 최저가 추출 계산을 위해 갱신된 내역 다시 불러오기
             updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             lowest_item = min(updated_item_history, key=lambda x: x['price'])
             
@@ -173,17 +168,14 @@ def get_lowest_price():
                 'buy_url': buy_url
             }
             
-        # 14일 경과 데이터 통합 삭제
         fourteen_days_ago = now_kst - timedelta(days=14)
         history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
         
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
-        # 단일 통합 그래프 그리기
         graph_file = draw_graph(history)
 
-        # 💡 [디자인 수정] 어떤 아이템이 최저가를 깨뜨렸는지 헤더에 명시
         if new_records_triggered:
             items_str = ", ".join(new_records_triggered)
             header = f"💥💣 <b>[최저가 갱신 ({items_str})!!]</b> 💣💥\n"
@@ -211,7 +203,6 @@ def get_lowest_price():
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
-        # 💡 개별 구매처를 버튼으로 연결하는 멀티 키보드 구조 생성
         reply_markup = {
             "inline_keyboard": [
                 [{"text": "🛒 DAYPACK 최저가 바로가기", "url": current_results['daypack']['buy_url']}],
@@ -274,7 +265,6 @@ def send_telegram(results):
                 requests.post(url, data=data, files={'photo': f})
         else:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
-            # 사진이 없을 경우 caption을 text 항목으로 치환하여 전송
             data['text'] = data.pop('caption')
             requests.post(url, data=data)
 
