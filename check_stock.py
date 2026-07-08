@@ -12,25 +12,17 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-TARGET_URL = "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
+# 💡 모니터링할 아이템 이름과 다나와 주소 정의
+ITEMS_INFO = {
+    "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
+    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
+}
 
 def draw_graph(history):
     if not history:
         return None
         
-    daily_min = {}
-    for item in history:
-        date_str = item['timestamp'][:10]
-        price = item['price']
-        
-        if date_str not in daily_min or price < daily_min[date_str]:
-            daily_min[date_str] = price
-            
-    sorted_dates = sorted(daily_min.keys())
-    sorted_prices = [daily_min[d] for d in sorted_dates]
-    dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
-    
-    plt.figure(figsize=(9, 5))
+    plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
     ax.set_facecolor('#f8f9fa')
@@ -40,32 +32,60 @@ def draw_graph(history):
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
     
-    line_color = '#4361ee'
-    plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, markersize=8, markerfacecolor='#ffffff', markeredgewidth=2)
+    # 💡 두 제품의 그래프 선 색상 다르게 지정 (daypack: 블루, allday: 오렌지)
+    colors = {"daypack": "#4361ee", "allday": "#f97316"}
+    all_prices = []
     
-    y_max = max(sorted_prices)
-    top_limit = max(y_max * 1.05, 155000)
+    for item_name, line_color in colors.items():
+        # 기존에 item 키가 없던 구데이터는 전부 'daypack'으로 간주하여 호환성 유지
+        item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+        if not item_history:
+            continue
+            
+        daily_min = {}
+        for item in item_history:
+            date_str = item['timestamp'][:10]
+            price = item['price']
+            if date_str not in daily_min or price < daily_min[date_str]:
+                daily_min[date_str] = price
+                
+        sorted_dates = sorted(daily_min.keys())
+        sorted_prices = [daily_min[d] for d in sorted_dates]
+        dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+        
+        all_prices.extend(sorted_prices)
+        
+        # 각 상품별 선 그래프 그리기
+        plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
+                 markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name)
+        
+        # 💡 숫자가 겹치지 않도록 daypack은 위로, allday는 아래로 텍스트 위치 분산 조정
+        xy_offset = (0, 10) if item_name == "daypack" else (0, -18)
+        for i, txt in enumerate(sorted_prices):
+            plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
+                         textcoords="offset points", xytext=xy_offset, 
+                         ha='center', fontsize=9, fontweight='bold', color='#333333')
+    
+    # Y축 범위 최솟값 100,000원 고정
+    y_max = max(all_prices) if all_prices else 150000
+    top_limit = max(y_max * 1.05, 160000)
     plt.ylim(100000, top_limit)
     
-    plt.fill_between(dates, sorted_prices, 100000, color=line_color, alpha=0.1)
-    
+    # 💡 15만 원 위치에 공통 목표가 빨간 실선 및 라벨 추가
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
-    plt.text(dates[0], target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
-    
-    for i, txt in enumerate(sorted_prices):
-        plt.annotate(f"{txt:,} won", (dates[i], sorted_prices[i]), 
-                     textcoords="offset points", xytext=(0, 10), 
-                     ha='center', fontsize=10, fontweight='bold', color='#333333')
+    plt.text(mdates.date2num(datetime.now() - timedelta(days=13)), target_price + 1500, 'Target (150,000 won)', color='#FF4B4B', fontweight='bold', fontsize=10)
     
     plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
     plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-    
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.xticks(dates, rotation=45, color='#6c757d')
+    plt.gcf().autofmt_xdate()
+    
+    # 💡 [요청 사항 반영] 그래프 내부에 범례 배치
+    plt.legend(loc='upper left', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
@@ -82,116 +102,136 @@ def get_lowest_price():
 
     driver = webdriver.Chrome(options=options)
     
+    history_file = 'price_history.json'
+    if os.path.exists(history_file):
+        with open(history_file, 'r', encoding='utf-8') as f:
+            try: history = json.load(f)
+            except: history = []
+    else:
+        history = []
+
+    now_kst = datetime.utcnow() + timedelta(hours=9)
+    now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+    current_date = now_kst.strftime('%Y-%m-%d')
+    current_time = now_kst.strftime('%H:%M:%S')
+    
+    current_results = {}
+    new_records_triggered = []
+    
     try:
-        driver.get(TARGET_URL)
-        wait = WebDriverWait(driver, 10)
-        
-        price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
-        price_text = price_element.text
-        
-        buy_url = TARGET_URL
-        
-        try:
-            li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
+        # 두 제품 순회하며 크롤링 진행
+        for item_name, url in ITEMS_INFO.items():
+            driver.get(url)
+            wait = WebDriverWait(driver, 10)
+            
+            price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
+            price_text = price_element.text
+            clean_price = int(re.sub(r'[^0-9]', '', price_text))
+            
+            # 최저가 링크 추출
+            buy_url = url
             try:
-                link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
-                extracted_url = link_el.get_attribute("href")
-                if extracted_url and "javascript" not in extracted_url:
-                    buy_url = extracted_url
-                else:
+                li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
+                try:
+                    link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
+                    extracted_url = link_el.get_attribute("href")
+                    if extracted_url and "javascript" not in extracted_url:
+                        buy_url = extracted_url
+                    else:
+                        buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+                except:
                     buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
             except:
-                try:
-                    buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
-                except:
-                    pass
-        except Exception as e:
-            pass
-        
-        clean_price = int(re.sub(r'[^0-9]', '', price_text))
-        
-        history_file = 'price_history.json'
-        
-        if os.path.exists(history_file):
-            with open(history_file, 'r', encoding='utf-8') as f:
-                try: history = json.load(f)
-                except: history = []
-        else:
-            history = []
-
-        is_new_record = False
-        if history:
-            prev_lowest_item = min(history, key=lambda x: x['price'])
-            if clean_price < prev_lowest_item['price']:
-                is_new_record = True
-
-        now_kst = datetime.utcnow() + timedelta(hours=9)
-        now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
-        
-        current_date = now_kst.strftime('%Y-%m-%d')
-        current_time = now_kst.strftime('%H:%M:%S')
-        
-        history.append({
-            'timestamp': now_str, 
-            'price': clean_price, 
-            'text': price_text
-        })
-        
+                pass
+            
+            # 각 아이템별 독립적인 최저가 갱신 여부 체크
+            item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+            is_new_record = False
+            if item_history:
+                prev_lowest_item = min(item_history, key=lambda x: x['price'])
+                if clean_price < prev_lowest_item['price']:
+                    is_new_record = True
+                    new_records_triggered.append(item_name)
+            
+            # 데이터 적재
+            history.append({
+                'item': item_name,
+                'timestamp': now_str, 
+                'price': clean_price, 
+                'text': price_text
+            })
+            
+            # 2주간 최저가 추출 계산을 위해 갱신된 내역 다시 불러오기
+            updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+            lowest_item = min(updated_item_history, key=lambda x: x['price'])
+            
+            current_results[item_name] = {
+                'curr_price': price_text,
+                'low_price': lowest_item['text'],
+                'low_date': lowest_item['timestamp'][:10],
+                'low_time': lowest_item['timestamp'][11:],
+                'buy_url': buy_url
+            }
+            
+        # 14일 경과 데이터 통합 삭제
         fourteen_days_ago = now_kst - timedelta(days=14)
         history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
         
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
-        if history:
-            lowest_item = min(history, key=lambda x: x['price'])
-            lowest_price_str = lowest_item['text']
-            lowest_date = lowest_item['timestamp'][:10]
-            lowest_time = lowest_item['timestamp'][11:]
-        else:
-            lowest_price_str = price_text
-            lowest_date = current_date
-            lowest_time = current_time
-
+        # 단일 통합 그래프 그리기
         graph_file = draw_graph(history)
 
-        def format_message(title):
-            if is_new_record:
-                header = f"💥💣 <b>[역대급 최저가 갱신!!]</b> 💣💥\n<b>{title}</b>"
-            else:
-                header = f"<b>{title}</b>"
+        # 💡 [디자인 수정] 어떤 아이템이 최저가를 깨뜨렸는지 헤더에 명시
+        if new_records_triggered:
+            items_str = ", ".join(new_records_triggered)
+            header = f"💥💣 <b>[최저가 갱신 ({items_str})!!]</b> 💣💥\n"
+        else:
+            header = ""
 
-            return f"""{header}
-───────────
-⏰ <b>알림 시각</b>
-  {current_date}
-  {current_time}
-───────────
-💰 <b>현재 최저가</b>
-  {price_text}원
-───────────
-📉 <b>2주 최저가</b>
-  {lowest_price_str}원
-  ({lowest_date})
-  ({lowest_time})
-───────────"""
+        def format_message(title):
+            msg = f"{header}<b>{title}</b>\n"
+            msg += "───────────\n"
+            msg += "⏰ <b>알림 시각</b>\n"
+            msg += f"  {current_date}\n"
+            msg += f"  {current_time}\n"
+            
+            for name in ["daypack", "allday"]:
+                res = current_results[name]
+                msg += "───────────\n"
+                msg += f"🎒 <b>{name.upper()}</b>\n"
+                msg += f"  • 현재가: {res['curr_price']}원\n"
+                msg += f"  • 2주최저: {res['low_price']}원\n"
+                msg += f"  ({res['low_date']})\n"
+                msg += f"  ({res['low_time']})\n"
+            msg += "───────────"
+            return msg
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
+        # 💡 개별 구매처를 버튼으로 연결하는 멀티 키보드 구조 생성
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": "🛒 DAYPACK 최저가 바로가기", "url": current_results['daypack']['buy_url']}],
+                [{"text": "🛒 ALLDAY 최저가 바로가기", "url": current_results['allday']['buy_url']}]
+            ]
+        }
+        
         if is_regular_report:
             return [
-                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "buy_url": buy_url},
-                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
+                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup},
+                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
             ]
             
         return [
-            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "buy_url": buy_url}
+            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
         ]
         
     except Exception as e:
         return [
-            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "buy_url": TARGET_URL}
+            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "reply_markup": None}
         ]
     finally:
         driver.quit()
@@ -209,13 +249,7 @@ def send_telegram(results):
         target = item["target"]
         text = item["text"]
         graph_file = item.get("graph")
-        buy_url = item.get("buy_url", TARGET_URL)
-        
-        reply_markup = {
-            "inline_keyboard": [
-                [{"text": "🛒 최저가 판매처로 바로가기", "url": buy_url}]
-            ]
-        }
+        reply_markup = item.get("reply_markup")
         
         if target == "regular":
             token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
@@ -226,24 +260,22 @@ def send_telegram(results):
             print(f"[{target}] 봇 토큰이 누락되었습니다.")
             continue
             
+        data = {
+            'chat_id': chat_id,
+            'caption': text,
+            'parse_mode': 'HTML'
+        }
+        if reply_markup:
+            data['reply_markup'] = json.dumps(reply_markup)
+            
         if graph_file and os.path.exists(graph_file):
             url = f"https://api.telegram.org/bot{token}/sendPhoto"
-            data = {
-                'chat_id': chat_id,
-                'caption': text,
-                'parse_mode': 'HTML',
-                'reply_markup': json.dumps(reply_markup) 
-            }
             with open(graph_file, 'rb') as f:
                 requests.post(url, data=data, files={'photo': f})
         else:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
-            data = {
-                'chat_id': chat_id,
-                'text': text,
-                'parse_mode': 'HTML',
-                'reply_markup': json.dumps(reply_markup)
-            }
+            # 사진이 없을 경우 caption을 text 항목으로 치환하여 전송
+            data['text'] = data.pop('caption')
             requests.post(url, data=data)
 
 if __name__ == "__main__":
