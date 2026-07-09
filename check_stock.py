@@ -37,8 +37,8 @@ def draw_graph(history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 글씨 가독성을 위해 두 선 모두 한 톤씩 더 진하고 묵직하게 변경
-    colors = {"daypack": "#1e293b", "allday": "#475569"}
+    # 💡 [색상 추천] 가독성과 구분이 확실한 로열 블루 & 번트 오렌지 조합
+    colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     all_prices = []
     
     for item_name, line_color in colors.items():
@@ -67,12 +67,12 @@ def draw_graph(history):
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
-        # 얇고 세련된 회색 테두리 설정
-        bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec="#cbd5e1", lw=1.2, alpha=0.95)
+        # 💡 [테두리 동기화] 테두리(ec) 색상도 그래프 선 색상(line_color)을 따라가도록 설정
+        bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
         
         xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
         for i, txt in enumerate(sorted_prices):
-            # 글씨 색상(color)을 해당 라인의 색상(line_color)과 동일하게 연결
+            # 글씨 색상(color)과 테두리(bbox ec)가 동일하게 연결됨
             ann = plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=9, fontweight='700', color=line_color,
