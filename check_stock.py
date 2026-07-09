@@ -64,7 +64,7 @@ def draw_graph(history):
         # 최저-최고 범위 반투명 밴드
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 💡 [선 두께 조정] linewidth를 2.5에서 1.5로 줄이고 마커 크기도 살짝 축소
+        # 선 두께 조정
         plt.plot(dates, mins, marker='o', color=line_color, linewidth=1.5, 
                  markersize=5, markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
         
@@ -86,7 +86,7 @@ def draw_graph(history):
     top_limit = max(y_max * 1.05, 160000)
     plt.ylim(100000, top_limit)
     
-    # 목표가 빨간 실선 (두께 그대로 유지)
+    # 목표가 빨간 실선
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     
@@ -132,8 +132,6 @@ def get_lowest_price():
 
     now_kst = datetime.utcnow() + timedelta(hours=9)
     now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
-    current_date = now_kst.strftime('%Y-%m-%d')
-    current_time = now_kst.strftime('%H:%M:%S')
     
     current_results = {}
     new_records_triggered = []
@@ -180,11 +178,10 @@ def get_lowest_price():
             updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             lowest_item = min(updated_item_history, key=lambda x: x['price'])
             
+            # 메시지 간소화를 위해 깔끔한 숫자(int) 형태만 저장
             current_results[item_name] = {
-                'curr_price': price_text,
-                'low_price': lowest_item['text'],
-                'low_date': lowest_item['timestamp'][:10],
-                'low_time': lowest_item['timestamp'][11:],
+                'curr_price': clean_price,
+                'low_price': lowest_item['price'],
                 'buy_url': buy_url
             }
             
@@ -202,23 +199,16 @@ def get_lowest_price():
         else:
             header = ""
 
+        # 💡 [요청 사항 반영] 완벽하게 압축된 메시지 포맷
         def format_message(title):
-            msg = f"{header}<b>{title}</b>\n"
-            msg += "───────────\n"
-            msg += "⏰ <b>알림 시각</b>\n"
-            msg += f"  {current_date}\n"
-            msg += f"  {current_time}\n"
-            
+            time_str = now_kst.strftime('%y%m%d %H:%M')
+            msg = f"{header}<b>{title}</b>\n\n"
+            msg += f"알림시각 : {time_str}\n"
+            msg += "상품가격(현재가/2주 최저가)\n"
             for name in ["daypack", "allday"]:
                 res = current_results[name]
-                msg += "───────────\n"
-                msg += f"🎒 <b>{name.upper()}</b>\n"
-                msg += f"  • 현재가: {res['curr_price']}원\n"
-                msg += f"  • 2주최저: {res['low_price']}원\n"
-                msg += f"  ({res['low_date']})\n"
-                msg += f"  ({res['low_time']})\n"
-            msg += "───────────"
-            return msg
+                msg += f"-{name.upper()} : {res['curr_price']:,} / {res['low_price']:,}\n"
+            return msg.strip()
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
