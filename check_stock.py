@@ -8,7 +8,303 @@ import matplotlib.ticker as ticker
 import matplotlib.patheffects as pe  # 💡 그림자 효과를 위한 패키지 추가
 from datetime import datetime, timedelta
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Optionsimport os
+import re
+import json
+import requests
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.ticker as ticker
+import matplotlib.patheffects as pe
+from datetime import datetime, timedelta
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# 모니터링할 아이템 이름과 다나와 주소 정의
+ITEMS_INFO = {
+    "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
+    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
+}
+
+def draw_graph(history):
+    if not history:
+        return None
+        
+    # 글씨체 설정 (깔끔한 산세리프)
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'Liberation Sans', 'sans-serif']
+        
+    plt.figure(figsize=(10, 6))
+    ax = plt.gca()
+    
+    ax.set_facecolor('#f8f9fa')
+    plt.gcf().patch.set_facecolor('#ffffff')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#e2e8f0')
+    ax.spines['bottom'].set_color('#e2e8f0')
+    
+    # 💡 [색상 수정] 글씨 가독성을 위해 두 선 모두 한 톤씩 더 진하고 묵직하게 변경
+    colors = {"daypack": "#1e293b", "allday": "#475569"}
+    all_prices = []
+    
+    for item_name, line_color in colors.items():
+        item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+        if not item_history:
+            continue
+            
+        daily_min = {}
+        for item in item_history:
+            date_str = item['timestamp'][:10]
+            price = item['price']
+            if date_str not in daily_min or price < daily_min[date_str]:
+                daily_min[date_str] = price
+                
+        sorted_dates = sorted(daily_min.keys())
+        sorted_prices = [daily_min[d] for d in sorted_dates]
+        dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+        
+        all_prices.extend(sorted_prices)
+        
+        # 선 아래 은은한 음영 효과
+        for n in range(1, 3):
+            plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2.5+(n*2), alpha=0.12)
+        
+        # 메인 선 그리기
+        plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
+                 markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
+        
+        # 얇고 세련된 회색 테두리 설정
+        bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec="#cbd5e1", lw=1.2, alpha=0.95)
+        
+        xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
+        for i, txt in enumerate(sorted_prices):
+            # 💡 [핵심 수정] 글씨 색상(color)을 해당 라인의 색상(line_color)과 동일하게 연결
+            ann = plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
+                         textcoords="offset points", xytext=xy_offset, 
+                         ha='center', fontsize=9, fontweight='700', color=line_color,
+                         bbox=bbox_props)
+            
+            # 말풍선 뒤 그림자 효과
+            ann.get_bbox_patch().set_path_effects([
+                pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.08),
+                pe.Normal()
+            ])
+    
+    y_max = max(all_prices) if all_prices else 150000
+    top_limit = max(y_max * 1.05, 160000)
+    plt.ylim(100000, top_limit)
+    
+    # 목표가 빨간 실선
+    target_price = 150000
+    plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
+    
+    ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
+            color='#FF4B4B', fontweight='bold', fontsize=10, 
+            va='bottom', ha='left', transform=ax.get_yaxis_transform())
+    
+    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.ylabel('Price (KRW)', fontsize=10, fontweight='500', color='#64748b')
+    plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
+    
+    ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+    plt.gcf().autofmt_xdate()
+    
+    # X축, Y축 숫자 색상 및 굵기 다듬기
+    ax.tick_params(colors='#64748b', labelsize=9)
+    
+    # 범례 위치 우측 하단 고정
+    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
+               fontsize=9, labelcolor='#334155', borderpad=0.8)
+    
+    graph_path = 'price_graph.png'
+    plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
+    plt.close()
+    
+    return graph_path
+
+def get_lowest_price():
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
+    driver = webdriver.Chrome(options=options)
+    
+    history_file = 'price_history.json'
+    if os.path.exists(history_file):
+        with open(history_file, 'r', encoding='utf-8') as f:
+            try: history = json.load(f)
+            except: history = []
+    else:
+        history = []
+
+    now_kst = datetime.utcnow() + timedelta(hours=9)
+    now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+    current_date = now_kst.strftime('%Y-%m-%d')
+    current_time = now_kst.strftime('%H:%M:%S')
+    
+    current_results = {}
+    new_records_triggered = []
+    
+    try:
+        for item_name, url in ITEMS_INFO.items():
+            driver.get(url)
+            wait = WebDriverWait(driver, 10)
+            
+            price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
+            price_text = price_element.text
+            clean_price = int(re.sub(r'[^0-9]', '', price_text))
+            
+            buy_url = url
+            try:
+                li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
+                try:
+                    link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
+                    extracted_url = link_el.get_attribute("href")
+                    if extracted_url and "javascript" not in extracted_url:
+                        buy_url = extracted_url
+                    else:
+                        buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+                except:
+                    buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+            except:
+                pass
+            
+            item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+            is_new_record = False
+            if item_history:
+                prev_lowest_item = min(item_history, key=lambda x: x['price'])
+                if clean_price < prev_lowest_item['price']:
+                    is_new_record = True
+                    new_records_triggered.append(item_name)
+            
+            history.append({
+                'item': item_name,
+                'timestamp': now_str, 
+                'price': clean_price, 
+                'text': price_text
+            })
+            
+            updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
+            lowest_item = min(updated_item_history, key=lambda x: x['price'])
+            
+            current_results[item_name] = {
+                'curr_price': price_text,
+                'low_price': lowest_item['text'],
+                'low_date': lowest_item['timestamp'][:10],
+                'low_time': lowest_item['timestamp'][11:],
+                'buy_url': buy_url
+            }
+            
+        fourteen_days_ago = now_kst - timedelta(days=14)
+        history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+        
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+            
+        graph_file = draw_graph(history)
+
+        if new_records_triggered:
+            items_str = ", ".join(new_records_triggered)
+            header = f"💥💣 <b>[최저가 갱신 ({items_str})!!]</b> 💣💥\n"
+        else:
+            header = ""
+
+        def format_message(title):
+            msg = f"{header}<b>{title}</b>\n"
+            msg += "───────────\n"
+            msg += "⏰ <b>알림 시각</b>\n"
+            msg += f"  {current_date}\n"
+            msg += f"  {current_time}\n"
+            
+            for name in ["daypack", "allday"]:
+                res = current_results[name]
+                msg += "───────────\n"
+                msg += f"🎒 <b>{name.upper()}</b>\n"
+                msg += f"  • 현재가: {res['curr_price']}원\n"
+                msg += f"  • 2주최저: {res['low_price']}원\n"
+                msg += f"  ({res['low_date']})\n"
+                msg += f"  ({res['low_time']})\n"
+            msg += "───────────"
+            return msg
+            
+        cron_trigger = os.environ.get('CRON_TRIGGER', '')
+        is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
+        
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": "🛒 DAYPACK 최저가 바로가기", "url": current_results['daypack']['buy_url']}],
+                [{"text": "🛒 ALLDAY 최저가 바로가기", "url": current_results['allday']['buy_url']}]
+            ]
+        }
+        
+        if is_regular_report:
+            return [
+                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup},
+                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
+            ]
+            
+        return [
+            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
+        ]
+        
+    except Exception as e:
+        return [
+            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "reply_markup": None}
+        ]
+    finally:
+        driver.quit()
+
+def send_telegram(results):
+    if not results:
+        return
+        
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    if not chat_id:
+        print("텔레그램 챗봇 ID가 누락되었습니다.")
+        return
+        
+    for item in results:
+        target = item["target"]
+        text = item["text"]
+        graph_file = item.get("graph")
+        reply_markup = item.get("reply_markup")
+        
+        if target == "regular":
+            token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
+        else:
+            token = os.environ.get('TELEGRAM_TOKEN')
+            
+        if not token:
+            print(f"[{target}] 봇 토큰이 누락되었습니다.")
+            continue
+            
+        data = {
+            'chat_id': chat_id,
+            'caption': text,
+            'parse_mode': 'HTML'
+        }
+        if reply_markup:
+            data['reply_markup'] = json.dumps(reply_markup)
+            
+        if graph_file and os.path.exists(graph_file):
+            url = f"https://api.telegram.org/bot{token}/sendPhoto"
+            with open(graph_file, 'rb') as f:
+                requests.post(url, data=data, files={'photo': f})
+        else:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data['text'] = data.pop('caption')
+            requests.post(url, data=data)
+
+if __name__ == "__main__":
+    results = get_lowest_price()
+    send_telegram(results)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
