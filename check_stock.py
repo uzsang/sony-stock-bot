@@ -23,7 +23,6 @@ def draw_graph(history):
     if not history:
         return None
         
-    # 글씨체 설정 (깔끔한 산세리프)
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'Liberation Sans', 'sans-serif']
         
@@ -37,7 +36,6 @@ def draw_graph(history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 💡 [색상 추천] 가독성과 구분이 확실한 로열 블루 & 번트 오렌지 조합
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     all_prices = []
     
@@ -46,39 +44,41 @@ def draw_graph(history):
         if not item_history:
             continue
             
-        daily_min = {}
+        # 💡 [핵심 수정] 하루 동안의 최저가와 최고가를 모두 기록합니다.
+        daily_stats = {}
         for item in item_history:
             date_str = item['timestamp'][:10]
             price = item['price']
-            if date_str not in daily_min or price < daily_min[date_str]:
-                daily_min[date_str] = price
+            if date_str not in daily_stats:
+                daily_stats[date_str] = {'min': price, 'max': price}
+            else:
+                daily_stats[date_str]['min'] = min(daily_stats[date_str]['min'], price)
+                daily_stats[date_str]['max'] = max(daily_stats[date_str]['max'], price)
                 
-        sorted_dates = sorted(daily_min.keys())
-        sorted_prices = [daily_min[d] for d in sorted_dates]
+        sorted_dates = sorted(daily_stats.keys())
+        mins = [daily_stats[d]['min'] for d in sorted_dates]
+        maxs = [daily_stats[d]['max'] for d in sorted_dates]
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
         
-        all_prices.extend(sorted_prices)
+        # Y축 자동 크기 조절을 위해 최고가들도 데이터에 포함
+        all_prices.extend(maxs) 
         
-        # 선 아래 은은한 음영 효과
-        for n in range(1, 3):
-            plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2.5+(n*2), alpha=0.12)
+        # 💡 [새로운 시각화] 최저가~최고가 범위를 반투명한 밴드로 칠해줍니다. (최저가=최고가일 경우 보이지 않음)
+        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.15, edgecolor='none')
         
-        # 메인 선 그리기
-        plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
+        # 메인 선은 구매의 핵심인 '최저가(mins)'를 기준으로 그립니다.
+        plt.plot(dates, mins, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
-        # 💡 [테두리 동기화] 테두리(ec) 색상도 그래프 선 색상(line_color)을 따라가도록 설정
         bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
         
         xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
-        for i, txt in enumerate(sorted_prices):
-            # 글씨 색상(color)과 테두리(bbox ec)가 동일하게 연결됨
-            ann = plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
+        for i, txt in enumerate(mins):
+            ann = plt.annotate(f"{txt:,} w", (dates[i], mins[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=9, fontweight='700', color=line_color,
                          bbox=bbox_props)
             
-            # 말풍선 뒤 그림자 효과
             ann.get_bbox_patch().set_path_effects([
                 pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.08),
                 pe.Normal()
@@ -88,7 +88,6 @@ def draw_graph(history):
     top_limit = max(y_max * 1.05, 160000)
     plt.ylim(100000, top_limit)
     
-    # 목표가 빨간 실선
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     
@@ -96,7 +95,7 @@ def draw_graph(history):
             color='#FF4B4B', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.title('Daily Lowest Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
@@ -104,10 +103,8 @@ def draw_graph(history):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
-    # X축, Y축 숫자 색상 및 굵기 다듬기
     ax.tick_params(colors='#64748b', labelsize=9)
     
-    # 범례 위치 우측 하단 고정
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
