@@ -32,8 +32,8 @@ def draw_graph(history):
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
     
-    # 두 제품의 그래프 선 색상 다르게 지정 (daypack: 블루, allday: 오렌지)
-    colors = {"daypack": "#4361ee", "allday": "#f97316"}
+    # 💡 [요청 사항 반영] daypack은 진한 회색, allday는 연한 회색으로 색상 지정
+    colors = {"daypack": "#4b5563", "allday": "#d1d5db"}
     all_prices = []
     
     for item_name, line_color in colors.items():
@@ -54,8 +54,13 @@ def draw_graph(history):
         
         all_prices.extend(sorted_prices)
         
+        # 💡 [요청 사항 반영] 선 아래에 투명도가 들어간 레이어를 겹쳐 은은한 음영(Glow) 효과 연출
+        for n in range(1, 3):
+            plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2.5+(n*2), alpha=0.12)
+        
+        # 메인 선 그리기 (💡 범례 이름은 .upper()를 붙여 대문자로 표시)
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
-                 markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name)
+                 markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
         xy_offset = (0, 10) if item_name == "daypack" else (0, -18)
         for i, txt in enumerate(sorted_prices):
@@ -71,8 +76,6 @@ def draw_graph(history):
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     
-    # 💡 [핵심 수정] 글자 위치를 데이터 날짜 기준이 아닌, '그래프 화면 자체'의 좌측 2% 지점으로 영구 고정
-    # y좌표는 타겟 가격 + 1000원 위치에 두고, 텍스트 하단(va='bottom')이 오도록 설정하여 선 바로 위에 안착시킵니다.
     ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
             color='#FF4B4B', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
@@ -85,6 +88,7 @@ def draw_graph(history):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
+    # 💡 [요청 사항 반영] 범례 위치 우측 하단(lower right) 고정
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
     
     graph_path = 'price_graph.png'
