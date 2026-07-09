@@ -61,12 +61,12 @@ def draw_graph(history):
         
         all_prices.extend(maxs) 
         
-        # 💡 [투명도 조절] alpha 값을 0.15에서 0.06으로 낮춰 아주 은은하고 고급스럽게 표현
+        # 최저-최고 범위 반투명 밴드
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 메인 선
-        plt.plot(dates, mins, marker='o', color=line_color, linewidth=2.5, 
-                 markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
+        # 💡 [선 두께 조정] linewidth를 2.5에서 1.5로 줄이고 마커 크기도 살짝 축소
+        plt.plot(dates, mins, marker='o', color=line_color, linewidth=1.5, 
+                 markersize=5, markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
         
         bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
         
@@ -86,6 +86,7 @@ def draw_graph(history):
     top_limit = max(y_max * 1.05, 160000)
     plt.ylim(100000, top_limit)
     
+    # 목표가 빨간 실선 (두께 그대로 유지)
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     
