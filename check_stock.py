@@ -62,11 +62,15 @@ def draw_graph(history):
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
+        # 💡 [요청 사항 반영] 모서리가 둥근 반투명 흰색 배경 설정
+        bbox_props = dict(boxstyle="round,pad=0.3", fc="#ffffff", ec="none", alpha=0.85)
+        
         xy_offset = (0, 10) if item_name == "daypack" else (0, -18)
         for i, txt in enumerate(sorted_prices):
             plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
                          textcoords="offset points", xytext=xy_offset, 
-                         ha='center', fontsize=9, fontweight='bold', color='#333333')
+                         ha='center', fontsize=9, fontweight='bold', color='#333333',
+                         bbox=bbox_props) # 배경 속성 적용
     
     y_max = max(all_prices) if all_prices else 150000
     top_limit = max(y_max * 1.05, 160000)
