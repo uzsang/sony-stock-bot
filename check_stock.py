@@ -44,7 +44,6 @@ def draw_graph(history):
         if not item_history:
             continue
             
-        # 💡 [핵심 수정] 하루 동안의 최저가와 최고가를 모두 기록합니다.
         daily_stats = {}
         for item in item_history:
             date_str = item['timestamp'][:10]
@@ -60,13 +59,12 @@ def draw_graph(history):
         maxs = [daily_stats[d]['max'] for d in sorted_dates]
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
         
-        # Y축 자동 크기 조절을 위해 최고가들도 데이터에 포함
         all_prices.extend(maxs) 
         
-        # 💡 [새로운 시각화] 최저가~최고가 범위를 반투명한 밴드로 칠해줍니다. (최저가=최고가일 경우 보이지 않음)
-        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.15, edgecolor='none')
+        # 💡 [투명도 조절] alpha 값을 0.15에서 0.06으로 낮춰 아주 은은하고 고급스럽게 표현
+        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 메인 선은 구매의 핵심인 '최저가(mins)'를 기준으로 그립니다.
+        # 메인 선
         plt.plot(dates, mins, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
