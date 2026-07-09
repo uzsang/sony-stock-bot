@@ -5,6 +5,7 @@ import requests
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
+import matplotlib.patheffects as pe  # 💡 그림자 효과를 위한 패키지 추가
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -22,6 +23,10 @@ def draw_graph(history):
     if not history:
         return None
         
+    # 💡 [글씨체 설정] 깃허브 서버의 기본 폰트 중 가장 깔끔한 산세리프(고딕) 계열 최우선 적용
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'Liberation Sans', 'sans-serif']
+        
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
@@ -29,8 +34,8 @@ def draw_graph(history):
     plt.gcf().patch.set_facecolor('#ffffff')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('#dddddd')
-    ax.spines['bottom'].set_color('#dddddd')
+    ax.spines['left'].set_color('#e2e8f0')
+    ax.spines['bottom'].set_color('#e2e8f0')
     
     # 미드톤 회색 조합
     colors = {"daypack": "#475569", "allday": "#94a3b8"}
@@ -58,19 +63,25 @@ def draw_graph(history):
         for n in range(1, 3):
             plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2.5+(n*2), alpha=0.12)
         
-        # 메인 선 그리기 (범례 대문자 적용)
+        # 메인 선 그리기
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
-        # 💡 [요청 사항 반영] 모서리가 둥근 반투명 흰색 배경 설정
-        bbox_props = dict(boxstyle="round,pad=0.3", fc="#ffffff", ec="none", alpha=0.85)
+        # 💡 [요청 사항 반영] 얇고 세련된 회색 테두리(ec="#cbd5e1") 설정
+        bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec="#cbd5e1", lw=1.2, alpha=0.95)
         
-        xy_offset = (0, 10) if item_name == "daypack" else (0, -18)
+        xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
         for i, txt in enumerate(sorted_prices):
-            plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
+            ann = plt.annotate(f"{txt:,} w", (dates[i], sorted_prices[i]), 
                          textcoords="offset points", xytext=xy_offset, 
-                         ha='center', fontsize=9, fontweight='bold', color='#333333',
-                         bbox=bbox_props) # 배경 속성 적용
+                         ha='center', fontsize=9, fontweight='600', color='#334155',
+                         bbox=bbox_props)
+            
+            # 💡 [요청 사항 반영] 말풍선 뒤에 부드럽고 고급스러운 그림자 효과 추가
+            ann.get_bbox_patch().set_path_effects([
+                pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.08),
+                pe.Normal()
+            ])
     
     y_max = max(all_prices) if all_prices else 150000
     top_limit = max(y_max * 1.05, 160000)
@@ -84,16 +95,20 @@ def draw_graph(history):
             color='#FF4B4B', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=14, fontweight='bold', pad=20, color='#2b2d42')
-    plt.ylabel('Price (KRW)', fontsize=10, color='#6c757d')
-    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.title('Daily Lowest Price (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.ylabel('Price (KRW)', fontsize=10, fontweight='500', color='#64748b')
+    plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
-    # 범례 위치 우측 하단 고정
-    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
+    # X축, Y축 숫자 색상 및 굵기 다듬기
+    ax.tick_params(colors='#64748b', labelsize=9)
+    
+    # 범례 위치 우측 하단 고정 및 디자인 개선
+    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
+               fontsize=9, labelcolor='#334155', borderpad=0.8)
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
