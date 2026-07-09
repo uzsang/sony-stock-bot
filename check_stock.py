@@ -3,7 +3,7 @@ import re
 import json
 import requests
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+import matplotlib.dates mdates
 import matplotlib.ticker as ticker
 from datetime import datetime, timedelta
 from selenium import webdriver
@@ -32,8 +32,8 @@ def draw_graph(history):
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
     
-    # 💡 [요청 사항 반영] daypack은 진한 회색, allday는 연한 회색으로 색상 지정
-    colors = {"daypack": "#4b5563", "allday": "#d1d5db"}
+    # 💡 [색상 밸런스 조정] 너무 진하거나 연하지 않은 최적의 미드톤 회색 조합
+    colors = {"daypack": "#475569", "allday": "#94a3b8"}
     all_prices = []
     
     for item_name, line_color in colors.items():
@@ -54,11 +54,11 @@ def draw_graph(history):
         
         all_prices.extend(sorted_prices)
         
-        # 💡 [요청 사항 반영] 선 아래에 투명도가 들어간 레이어를 겹쳐 은은한 음영(Glow) 효과 연출
+        # 선 아래 은은한 음영 효과
         for n in range(1, 3):
             plt.plot(dates, sorted_prices, marker='', color=line_color, linewidth=2.5+(n*2), alpha=0.12)
         
-        # 메인 선 그리기 (💡 범례 이름은 .upper()를 붙여 대문자로 표시)
+        # 메인 선 그리기 (범례 대문자 적용)
         plt.plot(dates, sorted_prices, marker='o', color=line_color, linewidth=2.5, 
                  markersize=6, markerfacecolor='#ffffff', markeredgewidth=2, label=item_name.upper())
         
@@ -88,7 +88,7 @@ def draw_graph(history):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
-    # 💡 [요청 사항 반영] 범례 위치 우측 하단(lower right) 고정
+    # 범례 위치 우측 하단 고정
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#dddddd')
     
     graph_path = 'price_graph.png'
