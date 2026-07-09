@@ -3,7 +3,7 @@ import re
 import json
 import requests
 import matplotlib.pyplot as plt
-import matplotlib.dates mdates
+import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
 from datetime import datetime, timedelta
 from selenium import webdriver
@@ -32,7 +32,7 @@ def draw_graph(history):
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
     
-    # 💡 [색상 밸런스 조정] 너무 진하거나 연하지 않은 최적의 미드톤 회색 조합
+    # 미드톤 회색 조합
     colors = {"daypack": "#475569", "allday": "#94a3b8"}
     all_prices = []
     
