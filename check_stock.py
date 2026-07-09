@@ -64,9 +64,9 @@ def draw_graph(history):
         # 최저-최고 범위 반투명 밴드
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 선 두께 조정
-        plt.plot(dates, mins, marker='o', color=line_color, linewidth=1.5, 
-                 markersize=5, markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
+        # 선 두께(linewidth) 및 마커 테두리(markeredgewidth)를 1.0으로 얇게 조정
+        plt.plot(dates, mins, marker='o', color=line_color, linewidth=1.0, 
+                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
         bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
         
@@ -178,7 +178,6 @@ def get_lowest_price():
             updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             lowest_item = min(updated_item_history, key=lambda x: x['price'])
             
-            # 메시지 간소화를 위해 깔끔한 숫자(int) 형태만 저장
             current_results[item_name] = {
                 'curr_price': clean_price,
                 'low_price': lowest_item['price'],
@@ -199,7 +198,6 @@ def get_lowest_price():
         else:
             header = ""
 
-        # 💡 [요청 사항 반영] 완벽하게 압축된 메시지 포맷
         def format_message(title):
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
