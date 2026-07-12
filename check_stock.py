@@ -19,7 +19,7 @@ ITEMS_INFO = {
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
 }
 
-# 💡 외부 라이브러리(scipy) 설치 없이 깃허브 액션에서 바로 작동하도록 구현한 순수 파이썬 곡선 생성 함수
+# 범위 대역을 부드럽게 만들어주는 곡선 함수
 def make_smooth_curve(x, y, resolution=20):
     if len(x) < 3:
         return x, y
@@ -61,65 +61,75 @@ def draw_graph(history):
     
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     
-    all_stats = {"daypack": {}, "allday": {}}
+    daily_stats = {"daypack": {}, "allday": {}}
+    exact_stats = {"daypack": [], "allday": []}
+    
+    # 💡 [데이터 분류] 일별 범위용 데이터와, 정확한 모든 시간대의 관측 데이터를 분리 수집합니다.
     for item in history:
         name = item.get('item', 'daypack')
-        if name not in all_stats:
+        if name not in daily_stats:
             continue
-        date_str = item['timestamp'][:10]
+            
+        dt_str = item['timestamp']
+        date_str = dt_str[:10]
         price = item['price']
-        if date_str not in all_stats[name]:
-            all_stats[name][date_str] = {'min': price, 'max': price, 'last': price}
+        
+        dt_obj = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+        exact_stats[name].append((dt_obj, price))
+        
+        if date_str not in daily_stats[name]:
+            daily_stats[name][date_str] = {'min': price, 'max': price}
         else:
-            all_stats[name][date_str]['min'] = min(all_stats[name][date_str]['min'], price)
-            all_stats[name][date_str]['max'] = max(all_stats[name][date_str]['max'], price)
-            all_stats[name][date_str]['last'] = price
+            daily_stats[name][date_str]['min'] = min(daily_stats[name][date_str]['min'], price)
+            daily_stats[name][date_str]['max'] = max(daily_stats[name][date_str]['max'], price)
 
     all_prices = []
     
     for item_name, line_color in colors.items():
-        if not all_stats[item_name]:
+        if not exact_stats[item_name]:
             continue
             
-        sorted_dates = sorted(all_stats[item_name].keys())
-        mins = [all_stats[item_name][d]['min'] for d in sorted_dates]
-        maxs = [all_stats[item_name][d]['max'] for d in sorted_dates]
-        lasts = [all_stats[item_name][d]['last'] for d in sorted_dates]
-        dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
-        dates_num = mdates.date2num(dates)
+        exact_stats[item_name].sort(key=lambda x: x[0])
+        e_dates = [x[0] for x in exact_stats[item_name]]
+        e_prices = [x[1] for x in exact_stats[item_name]]
         
-        all_prices.extend(maxs) 
+        all_prices.extend(e_prices)
         
-        # 곡선 좌표 계산
-        xs_smooth, ys_last_smooth = make_smooth_curve(dates_num, lasts)
-        _, ys_min_smooth = make_smooth_curve(dates_num, mins)
-        _, ys_max_smooth = make_smooth_curve(dates_num, maxs)
-        dates_smooth = mdates.num2date(xs_smooth)
-        
-        # 💡 [범위] 최저-최고 범위를 직선 대신 부드러운 곡선 대역으로 칠함
-        plt.fill_between(dates_smooth, ys_min_smooth, ys_max_smooth, color=line_color, alpha=0.06, edgecolor='none')
-        
-        # 💡 [범례용 가짜 선] 범례에 선과 마커가 모두 나오게 하기 위함
-        plt.plot([], [], marker='o', color=line_color, linewidth=1.0, 
+        # 1. 💡 [범위] 일별 최저-최고 범위는 부드러운 곡선 대역으로 칠합니다.
+        if daily_stats[item_name]:
+            sorted_dates = sorted(daily_stats[item_name].keys())
+            mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
+            maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
+            
+            daily_dt = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+            daily_num = mdates.date2num(daily_dt)
+            
+            xs_smooth, ys_min_smooth = make_smooth_curve(daily_num, mins)
+            _, ys_max_smooth = make_smooth_curve(daily_num, maxs)
+            dates_smooth = mdates.num2date(xs_smooth)
+            
+            plt.fill_between(dates_smooth, ys_min_smooth, ys_max_smooth, color=line_color, alpha=0.06, edgecolor='none')
+            
+        # 2. 💡 [메인 선] 관측된 '모든' 데이터(e_dates, e_prices)를 직선형 꺾은선 그래프로 그립니다.
+        plt.plot(e_dates, e_prices, marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
-        
-        # 💡 [메인 실선] 곡선형 추세선 그리기
-        plt.plot(dates_smooth, ys_last_smooth, color=line_color, linewidth=1.0)
-        
-        # 💡 [마커] 실제 날짜 위치에 동그라미 포인트만 찍기
-        plt.plot(dates, lasts, marker='o', color=line_color, linewidth=0, 
-                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
         
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
         
-        for i, txt in enumerate(lasts):
-            date_str = sorted_dates[i]
-            my_price = lasts[i]
-            other_item = "allday" if item_name == "daypack" else "daypack"
+        other_item = "allday" if item_name == "daypack" else "daypack"
+        for i, txt in enumerate(e_prices):
+            # 💡 [스마트 필터] 점과 선은 모두 그리되, 가격이 계속 똑같을 경우 중복 텍스트 출력을 방지합니다. 
+            # (단, 가격이 변한 첫 시점과 가장 마지막 데이터에는 무조건 라벨을 출력합니다)
+            if i > 0 and e_prices[i] == e_prices[i-1] and i != len(e_prices) - 1:
+                continue
+                
+            dt_obj = e_dates[i]
+            my_price = e_prices[i]
             
-            # 겹침 방지 로직 (내가 더 비싸면 위로, 싸면 아래로)
-            if other_item in all_stats and date_str in all_stats[other_item]:
-                other_price = all_stats[other_item][date_str]['last']
+            # 정확히 같은 시간대에 관측된 상대 제품의 가격을 확인하여 위/아래 겹침을 방지
+            other_prices_at_t = [x[1] for x in exact_stats[other_item] if x[0] == dt_obj]
+            if other_prices_at_t:
+                other_price = other_prices_at_t[0]
                 if my_price > other_price:
                     xy_offset = (0, 9)
                 elif my_price < other_price:
@@ -129,7 +139,7 @@ def draw_graph(history):
             else:
                 xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
 
-            ann = plt.annotate(f"{txt:,} w", (dates[i], lasts[i]), 
+            ann = plt.annotate(f"{txt:,} w", (dt_obj, my_price), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
@@ -152,11 +162,12 @@ def draw_graph(history):
             color='#FF4B4B', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('Daily Lowest Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.title('All Observations & Daily Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
+    # X축 눈금을 날짜+시간(월/일) 형식에 맞게 자연스럽게 출력되도록 조정
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate()
     
