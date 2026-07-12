@@ -37,51 +37,73 @@ def draw_graph(history):
     ax.spines['bottom'].set_color('#e2e8f0')
     
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
+    
+    # 💡 [핵심 추가] 겹침 방지 로직을 위해 두 아이템의 일별 데이터를 미리 정리합니다.
+    all_stats = {"daypack": {}, "allday": {}}
+    for item in history:
+        name = item.get('item', 'daypack')
+        if name not in all_stats:
+            continue
+        date_str = item['timestamp'][:10]
+        price = item['price']
+        if date_str not in all_stats[name]:
+            all_stats[name][date_str] = {'min': price, 'max': price, 'last': price}
+        else:
+            all_stats[name][date_str]['min'] = min(all_stats[name][date_str]['min'], price)
+            all_stats[name][date_str]['max'] = max(all_stats[name][date_str]['max'], price)
+            all_stats[name][date_str]['last'] = price
+
     all_prices = []
     
     for item_name, line_color in colors.items():
-        item_history = [x for x in history if x.get('item', 'daypack') == item_name]
-        if not item_history:
+        if not all_stats[item_name]:
             continue
             
-        # 💡 [로직 수정] 하루 동안의 최저가, 최고가와 함께 '마지막 관측가(last)'를 추출합니다.
-        daily_stats = {}
-        for item in item_history:
-            date_str = item['timestamp'][:10]
-            price = item['price']
-            if date_str not in daily_stats:
-                daily_stats[date_str] = {'min': price, 'max': price, 'last': price}
-            else:
-                daily_stats[date_str]['min'] = min(daily_stats[date_str]['min'], price)
-                daily_stats[date_str]['max'] = max(daily_stats[date_str]['max'], price)
-                daily_stats[date_str]['last'] = price  # 뒤에 쌓인 데이터가 해당 날짜의 마지막 가격이 됨
-                
-        sorted_dates = sorted(daily_stats.keys())
-        mins = [daily_stats[d]['min'] for d in sorted_dates]
-        maxs = [daily_stats[d]['max'] for d in sorted_dates]
-        lasts = [daily_stats[d]['last'] for d in sorted_dates]  # 마지막 관측 가격 리스트
+        sorted_dates = sorted(all_stats[item_name].keys())
+        mins = [all_stats[item_name][d]['min'] for d in sorted_dates]
+        maxs = [all_stats[item_name][d]['max'] for d in sorted_dates]
+        lasts = [all_stats[item_name][d]['last'] for d in sorted_dates]
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
         
         all_prices.extend(maxs) 
         
-        # 최저가와 최고가 사이를 은은한 변동 범위 대역으로 채움
+        # 최저-최고 범위 반투명 밴드
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 💡 [요청 사항 반영] 실선은 '마지막 관측 가격(lasts)'을 기준으로 얇게 그립니다.
+        # 메인 실선 (마지막 관측 가격)
         plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
-        bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
+        # 💡 [크기/투명도 조정] 여백(pad)을 0.2로 줄이고, 배경(alpha)을 0.8로 반투명하게 설정
+        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
         
-        xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
         for i, txt in enumerate(lasts):
+            date_str = sorted_dates[i]
+            my_price = lasts[i]
+            other_item = "allday" if item_name == "daypack" else "daypack"
+            
+            # 💡 [스마트 겹침 방지] 동일 날짜의 두 제품 가격을 비교하여 위/아래 방향을 동적으로 결정
+            if other_item in all_stats and date_str in all_stats[other_item]:
+                other_price = all_stats[other_item][date_str]['last']
+                if my_price > other_price:
+                    xy_offset = (0, 9)    # 내가 비싸면 위로
+                elif my_price < other_price:
+                    xy_offset = (0, -16)  # 내가 싸면 아래로
+                else:
+                    # 가격이 완전히 동일할 경우 기본 위치 배정
+                    xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
+            else:
+                xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
+
+            # 💡 [텍스트 조정] 폰트 사이즈를 8로 줄이고 텍스트 자체도 살짝 투명도(0.9) 부여
             ann = plt.annotate(f"{txt:,} w", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
-                         ha='center', fontsize=9, fontweight='700', color=line_color,
+                         ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
             
+            # 그림자 효과도 작아진 말풍선에 맞게 세밀하게 조절
             ann.get_bbox_patch().set_path_effects([
-                pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.08),
+                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.05),
                 pe.Normal()
             ])
     
