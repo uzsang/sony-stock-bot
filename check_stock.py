@@ -19,6 +19,29 @@ ITEMS_INFO = {
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
 }
 
+# 💡 외부 라이브러리(scipy) 설치 없이 깃허브 액션에서 바로 작동하도록 구현한 순수 파이썬 곡선 생성 함수
+def make_smooth_curve(x, y, resolution=20):
+    if len(x) < 3:
+        return x, y
+    x_smooth, y_smooth = [], []
+    for i in range(len(x) - 1):
+        p0, p1, p2, p3 = max(0, i - 1), i, i + 1, min(len(x) - 1, i + 2)
+        for t in range(resolution):
+            t_val = t / resolution
+            t2 = t_val * t_val
+            t3 = t2 * t_val
+            
+            b0 = -t3 + 2*t2 - t_val
+            b1 = 3*t3 - 5*t2 + 2
+            b2 = -3*t3 + 4*t2 + t_val
+            b3 = t3 - t2
+            
+            x_smooth.append(0.5 * (x[p0]*b0 + x[p1]*b1 + x[p2]*b2 + x[p3]*b3))
+            y_smooth.append(0.5 * (y[p0]*b0 + y[p1]*b1 + y[p2]*b2 + y[p3]*b3))
+    x_smooth.append(x[-1])
+    y_smooth.append(y[-1])
+    return x_smooth, y_smooth
+
 def draw_graph(history):
     if not history:
         return None
@@ -38,7 +61,6 @@ def draw_graph(history):
     
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     
-    # 💡 [핵심 추가] 겹침 방지 로직을 위해 두 아이템의 일별 데이터를 미리 정리합니다.
     all_stats = {"daypack": {}, "allday": {}}
     for item in history:
         name = item.get('item', 'daypack')
@@ -64,17 +86,30 @@ def draw_graph(history):
         maxs = [all_stats[item_name][d]['max'] for d in sorted_dates]
         lasts = [all_stats[item_name][d]['last'] for d in sorted_dates]
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+        dates_num = mdates.date2num(dates)
         
         all_prices.extend(maxs) 
         
-        # 최저-최고 범위 반투명 밴드
-        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
+        # 곡선 좌표 계산
+        xs_smooth, ys_last_smooth = make_smooth_curve(dates_num, lasts)
+        _, ys_min_smooth = make_smooth_curve(dates_num, mins)
+        _, ys_max_smooth = make_smooth_curve(dates_num, maxs)
+        dates_smooth = mdates.num2date(xs_smooth)
         
-        # 메인 실선 (마지막 관측 가격)
-        plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
+        # 💡 [범위] 최저-최고 범위를 직선 대신 부드러운 곡선 대역으로 칠함
+        plt.fill_between(dates_smooth, ys_min_smooth, ys_max_smooth, color=line_color, alpha=0.06, edgecolor='none')
+        
+        # 💡 [범례용 가짜 선] 범례에 선과 마커가 모두 나오게 하기 위함
+        plt.plot([], [], marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
-        # 💡 [크기/투명도 조정] 여백(pad)을 0.2로 줄이고, 배경(alpha)을 0.8로 반투명하게 설정
+        # 💡 [메인 실선] 곡선형 추세선 그리기
+        plt.plot(dates_smooth, ys_last_smooth, color=line_color, linewidth=1.0)
+        
+        # 💡 [마커] 실제 날짜 위치에 동그라미 포인트만 찍기
+        plt.plot(dates, lasts, marker='o', color=line_color, linewidth=0, 
+                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
+        
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
         
         for i, txt in enumerate(lasts):
@@ -82,36 +117,34 @@ def draw_graph(history):
             my_price = lasts[i]
             other_item = "allday" if item_name == "daypack" else "daypack"
             
-            # 💡 [스마트 겹침 방지] 동일 날짜의 두 제품 가격을 비교하여 위/아래 방향을 동적으로 결정
+            # 겹침 방지 로직 (내가 더 비싸면 위로, 싸면 아래로)
             if other_item in all_stats and date_str in all_stats[other_item]:
                 other_price = all_stats[other_item][date_str]['last']
                 if my_price > other_price:
-                    xy_offset = (0, 9)    # 내가 비싸면 위로
+                    xy_offset = (0, 9)
                 elif my_price < other_price:
-                    xy_offset = (0, -16)  # 내가 싸면 아래로
+                    xy_offset = (0, -16)
                 else:
-                    # 가격이 완전히 동일할 경우 기본 위치 배정
                     xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
             else:
                 xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
 
-            # 💡 [텍스트 조정] 폰트 사이즈를 8로 줄이고 텍스트 자체도 살짝 투명도(0.9) 부여
             ann = plt.annotate(f"{txt:,} w", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
             
-            # 그림자 효과도 작아진 말풍선에 맞게 세밀하게 조절
             ann.get_bbox_patch().set_path_effects([
                 pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.05),
                 pe.Normal()
             ])
     
     y_max = max(all_prices) if all_prices else 150000
-    top_limit = max(y_max * 1.05, 160000)
-    plt.ylim(100000, top_limit)
+    top_limit = max(y_max * 1.05, 125000)
     
-    # 목표가 빨간 실선
+    # 💡 [요청 사항 반영] Y축 최솟값을 120,000원으로 고정
+    plt.ylim(120000, top_limit)
+    
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
     
