@@ -42,8 +42,8 @@ def make_smooth_curve(x, y, resolution=20):
     y_smooth.append(y[-1])
     return x_smooth, y_smooth
 
-def draw_graph(history):
-    if not history:
+def draw_graph(full_history):
+    if not full_history:
         return None
         
     plt.rcParams['font.family'] = 'sans-serif'
@@ -59,9 +59,18 @@ def draw_graph(history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
+    # 💡 [역대 최저가 및 날짜 추출] 전체 기록 중 가장 저렴했던 가격과 그 날짜 찾기
+    all_time_min_item = min(full_history, key=lambda x: x['price'])
+    all_time_min = all_time_min_item['price']
+    all_time_min_date = all_time_min_item['timestamp'][:10]
+    
+    # 그래프에 표시할 최근 14일 데이터만 필터링
+    now_kst = datetime.utcnow() + timedelta(hours=9)
+    fourteen_days_ago = now_kst - timedelta(days=14)
+    history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+    
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     
-    # 💡 [데이터 분류] 다시 일별(Daily) 기준으로 데이터를 묶어줍니다.
     daily_stats = {"daypack": {}, "allday": {}}
     for item in history:
         name = item.get('item', 'daypack')
@@ -75,7 +84,7 @@ def draw_graph(history):
         else:
             daily_stats[name][date_str]['min'] = min(daily_stats[name][date_str]['min'], price)
             daily_stats[name][date_str]['max'] = max(daily_stats[name][date_str]['max'], price)
-            daily_stats[name][date_str]['last'] = price  # 해당 날짜의 마지막 관측 가격
+            daily_stats[name][date_str]['last'] = price
 
     all_prices = []
     
@@ -93,14 +102,14 @@ def draw_graph(history):
         
         all_prices.extend(maxs) 
         
-        # 1. 💡 [범위] 최저-최고 범위는 부드러운 곡선 대역으로 칠합니다.
+        # 최저-최고 범위 부드러운 곡선 대역
         xs_smooth, ys_min_smooth = make_smooth_curve(dates_num, mins)
         _, ys_max_smooth = make_smooth_curve(dates_num, maxs)
         dates_smooth = mdates.num2date(xs_smooth)
         
         plt.fill_between(dates_smooth, ys_min_smooth, ys_max_smooth, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 2. 💡 [메인 선] 마지막 관측 가격(lasts)은 직선형 꺾은선으로 날카롭게 그립니다.
+        # 마지막 관측 가격 메인 실선
         plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
@@ -111,7 +120,6 @@ def draw_graph(history):
             my_price = lasts[i]
             other_item = "allday" if item_name == "daypack" else "daypack"
             
-            # 겹침 방지 로직 (내가 더 비싸면 위로, 싸면 아래로)
             if other_item in daily_stats and date_str in daily_stats[other_item]:
                 other_price = daily_stats[other_item][date_str]['last']
                 if my_price > other_price:
@@ -136,12 +144,19 @@ def draw_graph(history):
     y_max = max(all_prices) if all_prices else 150000
     top_limit = max(y_max * 1.05, 125000)
     
-    # 💡 [요청 사항] Y축 최솟값을 120,000원으로 고정
-    plt.ylim(120000, top_limit)
+    # 역대 최저가가 12만 원보다 낮을 경우 하단 범위를 자동으로 늘려 선이 보이게 조정
+    bottom_limit = min(120000, all_time_min - 2000)
+    plt.ylim(bottom_limit, top_limit)
     
+    # 💡 [반영] 역대 최저가 라인 텍스트에 관측된 날짜(all_time_min_date) 추가
+    plt.axhline(y=all_time_min, color='#ec4899', linestyle='--', linewidth=1.5, alpha=0.8)
+    ax.text(0.02, all_time_min + 800, f'All-Time Low ({all_time_min:,} won) on {all_time_min_date}', 
+            color='#ec4899', fontweight='bold', fontsize=9, 
+            va='bottom', ha='left', transform=ax.get_yaxis_transform())
+    
+    # 목표가 빨간 실선
     target_price = 150000
     plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
-    
     ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
             color='#FF4B4B', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
@@ -151,8 +166,11 @@ def draw_graph(history):
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
+    
+    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
+    ax.xaxis.set_major_locator(mdates.DayLocator())
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.gcf().autofmt_xdate()
+    plt.gcf().autofmt_xdate(rotation=45) # 텍스트가 겹치지 않게 45도 기울임
     
     ax.tick_params(colors='#64748b', labelsize=9)
     
@@ -214,8 +232,13 @@ def get_lowest_price():
             
             item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             is_new_record = False
-            if item_history:
-                prev_lowest_item = min(item_history, key=lambda x: x['price'])
+            
+            # 2주 최저가 비교 (메시지용)
+            fourteen_days_ago = now_kst - timedelta(days=14)
+            recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+            
+            if recent_item_history:
+                prev_lowest_item = min(recent_item_history, key=lambda x: x['price'])
                 if clean_price < prev_lowest_item['price']:
                     is_new_record = True
                     new_records_triggered.append(item_name)
@@ -227,8 +250,8 @@ def get_lowest_price():
                 'text': price_text
             })
             
-            updated_item_history = [x for x in history if x.get('item', 'daypack') == item_name]
-            lowest_item = min(updated_item_history, key=lambda x: x['price'])
+            updated_recent = [x for x in history if x.get('item', 'daypack') == item_name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+            lowest_item = min(updated_recent, key=lambda x: x['price'])
             
             current_results[item_name] = {
                 'curr_price': clean_price,
@@ -236,21 +259,18 @@ def get_lowest_price():
                 'buy_url': buy_url
             }
             
-        fourteen_days_ago = now_kst - timedelta(days=14)
-        history = [item for item in history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
-        
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
+        # 전체 히스토리를 그래프 함수로 넘김
         graph_file = draw_graph(history)
 
         if new_records_triggered:
             items_str = ", ".join(new_records_triggered)
-            header = f"💥💣 <b>[최저가 갱신 ({items_str})!!]</b> 💣💥\n"
+            header = f"💥💣 <b>[2주 최저가 갱신 ({items_str})!!]</b> 💣💥\n"
         else:
             header = ""
 
-        # 메시지 간소화 유지
         def format_message(title):
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
