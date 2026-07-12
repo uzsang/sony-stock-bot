@@ -59,7 +59,7 @@ def draw_graph(full_history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 💡 [역대 최저가 및 날짜 추출] 전체 기록 중 가장 저렴했던 가격과 그 날짜 찾기
+    # 역대 최저가 및 날짜 추출
     all_time_min_item = min(full_history, key=lambda x: x['price'])
     all_time_min = all_time_min_item['price']
     all_time_min_date = all_time_min_item['timestamp'][:10]
@@ -148,17 +148,17 @@ def draw_graph(full_history):
     bottom_limit = min(120000, all_time_min - 2000)
     plt.ylim(bottom_limit, top_limit)
     
-    # 💡 [반영] 역대 최저가 라인 텍스트에 관측된 날짜(all_time_min_date) 추가
-    plt.axhline(y=all_time_min, color='#ec4899', linestyle='--', linewidth=1.5, alpha=0.8)
+    # 💡 [반영] 역대 최저가 진한 회색 실선
+    plt.axhline(y=all_time_min, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 800, f'All-Time Low ({all_time_min:,} won) on {all_time_min_date}', 
-            color='#ec4899', fontweight='bold', fontsize=9, 
+            color='#475569', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 빨간 실선
+    # 💡 [반영] 목표가 연한 회색 점선
     target_price = 150000
-    plt.axhline(y=target_price, color='#FF4B4B', linestyle='-', linewidth=2, alpha=0.8)
+    plt.axhline(y=target_price, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
-            color='#FF4B4B', fontweight='bold', fontsize=10, 
+            color='#94a3b8', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     plt.title('Daily Final Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
