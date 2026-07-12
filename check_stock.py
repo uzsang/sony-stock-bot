@@ -44,35 +44,38 @@ def draw_graph(history):
         if not item_history:
             continue
             
+        # 💡 [로직 수정] 하루 동안의 최저가, 최고가와 함께 '마지막 관측가(last)'를 추출합니다.
         daily_stats = {}
         for item in item_history:
             date_str = item['timestamp'][:10]
             price = item['price']
             if date_str not in daily_stats:
-                daily_stats[date_str] = {'min': price, 'max': price}
+                daily_stats[date_str] = {'min': price, 'max': price, 'last': price}
             else:
                 daily_stats[date_str]['min'] = min(daily_stats[date_str]['min'], price)
                 daily_stats[date_str]['max'] = max(daily_stats[date_str]['max'], price)
+                daily_stats[date_str]['last'] = price  # 뒤에 쌓인 데이터가 해당 날짜의 마지막 가격이 됨
                 
         sorted_dates = sorted(daily_stats.keys())
         mins = [daily_stats[d]['min'] for d in sorted_dates]
         maxs = [daily_stats[d]['max'] for d in sorted_dates]
+        lasts = [daily_stats[d]['last'] for d in sorted_dates]  # 마지막 관측 가격 리스트
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
         
         all_prices.extend(maxs) 
         
-        # 최저-최고 범위 반투명 밴드
+        # 최저가와 최고가 사이를 은은한 변동 범위 대역으로 채움
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
-        # 선 두께(linewidth) 및 마커 테두리(markeredgewidth)를 1.0으로 얇게 조정
-        plt.plot(dates, mins, marker='o', color=line_color, linewidth=1.0, 
+        # 💡 [요청 사항 반영] 실선은 '마지막 관측 가격(lasts)'을 기준으로 얇게 그립니다.
+        plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
         bbox_props = dict(boxstyle="round,pad=0.35", fc="#ffffff", ec=line_color, lw=1.2, alpha=0.95)
         
         xy_offset = (0, 11) if item_name == "daypack" else (0, -20)
-        for i, txt in enumerate(mins):
-            ann = plt.annotate(f"{txt:,} w", (dates[i], mins[i]), 
+        for i, txt in enumerate(lasts):
+            ann = plt.annotate(f"{txt:,} w", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=9, fontweight='700', color=line_color,
                          bbox=bbox_props)
