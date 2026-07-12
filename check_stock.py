@@ -148,17 +148,17 @@ def draw_graph(full_history):
     bottom_limit = min(120000, all_time_min - 2000)
     plt.ylim(bottom_limit, top_limit)
     
-    # 💡 [반영] 역대 최저가 진한 회색 실선
-    plt.axhline(y=all_time_min, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
+    # 💡 [반영] 역대 최저가 연한 회색 점선
+    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 800, f'All-Time Low ({all_time_min:,} won) on {all_time_min_date}', 
-            color='#475569', fontweight='bold', fontsize=9, 
+            color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 💡 [반영] 목표가 연한 회색 점선
+    # 💡 [반영] 목표가 진한 회색 실선
     target_price = 150000
-    plt.axhline(y=target_price, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
+    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
-            color='#94a3b8', fontweight='bold', fontsize=10, 
+            color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     plt.title('Daily Final Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
