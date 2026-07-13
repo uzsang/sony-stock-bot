@@ -19,29 +19,6 @@ ITEMS_INFO = {
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
 }
 
-# 범위 대역을 부드럽게 만들어주는 곡선 함수
-def make_smooth_curve(x, y, resolution=20):
-    if len(x) < 3:
-        return x, y
-    x_smooth, y_smooth = [], []
-    for i in range(len(x) - 1):
-        p0, p1, p2, p3 = max(0, i - 1), i, i + 1, min(len(x) - 1, i + 2)
-        for t in range(resolution):
-            t_val = t / resolution
-            t2 = t_val * t_val
-            t3 = t2 * t_val
-            
-            b0 = -t3 + 2*t2 - t_val
-            b1 = 3*t3 - 5*t2 + 2
-            b2 = -3*t3 + 4*t2 + t_val
-            b3 = t3 - t2
-            
-            x_smooth.append(0.5 * (x[p0]*b0 + x[p1]*b1 + x[p2]*b2 + x[p3]*b3))
-            y_smooth.append(0.5 * (y[p0]*b0 + y[p1]*b1 + y[p2]*b2 + y[p3]*b3))
-    x_smooth.append(x[-1])
-    y_smooth.append(y[-1])
-    return x_smooth, y_smooth
-
 def draw_graph(full_history):
     if not full_history:
         return None
@@ -77,7 +54,7 @@ def draw_graph(full_history):
         if name not in daily_stats:
             continue
         date_str = item['timestamp'][:10]
-        # 💡 [반영] 금액을 1000단위로 축소
+        # 금액을 천 단위로 축소
         price = item['price'] / 1000.0
         
         if date_str not in daily_stats[name]:
@@ -99,16 +76,11 @@ def draw_graph(full_history):
         lasts = [daily_stats[item_name][d]['last'] for d in sorted_dates]
         
         dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
-        dates_num = mdates.date2num(dates)
         
         all_prices.extend(maxs) 
         
-        # 최저-최고 범위 부드러운 곡선 대역
-        xs_smooth, ys_min_smooth = make_smooth_curve(dates_num, mins)
-        _, ys_max_smooth = make_smooth_curve(dates_num, maxs)
-        dates_smooth = mdates.num2date(xs_smooth)
-        
-        plt.fill_between(dates_smooth, ys_min_smooth, ys_max_smooth, color=line_color, alpha=0.06, edgecolor='none')
+        # 💡 [반영] 최저-최고 범위 직선 대역 (곡선 함수 제거)
+        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
         # 마지막 관측 가격 메인 실선
         plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
@@ -132,7 +104,8 @@ def draw_graph(full_history):
             else:
                 xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
 
-            ann = plt.annotate(f"{txt:,.0f}", (dates[i], lasts[i]), 
+            # 💡 [반영] 텍스트 끝에 'k' 문자열 추가
+            ann = plt.annotate(f"{txt:,.0f}k", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
@@ -162,22 +135,20 @@ def draw_graph(full_history):
             color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 💡 [반영] 기간 3주 반영 (Title)
     plt.title('Daily Final Price & Range (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
-    # 💡 [반영] 단위 천 원 반영 (Y-axis label)
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정: 21일의 경우 텍스트가 겹치지 않게 간격을 자동으로 조절
+    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(dates) <= 21 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
     
     ax.tick_params(colors='#64748b', labelsize=9)
     
-    # 💡 [반영] 범례 원래 스타일로 원복
+    # 범례 원래 스타일
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
@@ -237,7 +208,7 @@ def get_lowest_price():
             item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             is_new_record = False
             
-            # 💡 [반영] 3주(21일) 최저가 비교
+            # 3주(21일) 최저가 비교
             target_days_ago = now_kst - timedelta(days=21)
             recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
             
@@ -280,7 +251,6 @@ def get_lowest_price():
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
             msg += f"알림시각 : {time_str}\n"
-            # 💡 [반영] 메시지 텍스트에서도 3주로 변경
             msg += "상품가격(현재가/3주 최저가)\n"
             for name in ["daypack", "allday"]:
                 res = current_results[name]
