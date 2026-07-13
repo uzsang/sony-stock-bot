@@ -142,23 +142,25 @@ def draw_graph(full_history):
             ])
     
     y_max = max(all_prices) if all_prices else 150000
-    top_limit = max(y_max * 1.05, 125000)
+    
+    # 💡 [여백 확보] 목표가 라인과 고급화된 범례가 들어갈 공간을 확보하기 위해 상단 리미트를 늘림
+    top_limit = max(y_max * 1.08, 155000)
     
     # 역대 최저가가 12만 원보다 낮을 경우 하단 범위를 자동으로 늘려 선이 보이게 조정
     bottom_limit = min(120000, all_time_min - 2000)
     plt.ylim(bottom_limit, top_limit)
     
-    # 💡 [반영] 역대 최저가 연한 회색 점선
-    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
+    # 역대 최저가 진한 회색 실선
+    plt.axhline(y=all_time_min, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 800, f'All-Time Low ({all_time_min:,} won) on {all_time_min_date}', 
-            color='#94a3b8', fontweight='bold', fontsize=9, 
+            color='#475569', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 💡 [반영] 목표가 진한 회색 실선
+    # 목표가 연한 회색 점선
     target_price = 150000
-    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
+    plt.axhline(y=target_price, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
-            color='#475569', fontweight='bold', fontsize=10, 
+            color='#94a3b8', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     plt.title('Daily Final Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
@@ -167,15 +169,25 @@ def draw_graph(full_history):
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
     ax.xaxis.set_major_locator(mdates.DayLocator())
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.gcf().autofmt_xdate(rotation=45) # 텍스트가 겹치지 않게 45도 기울임
+    plt.gcf().autofmt_xdate(rotation=45)
     
     ax.tick_params(colors='#64748b', labelsize=9)
     
-    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
-               fontsize=9, labelcolor='#334155', borderpad=0.8)
+    # 💡 [반영] 범례(Legend)를 프리미엄 UI 스타일로 세련되게 변경
+    leg = plt.legend(loc='upper right', frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1', 
+                     fontsize=9.5, labelcolor='#334155', borderpad=0.7, handletextpad=0.6, handlelength=1.5)
+    
+    # 둥근 모서리 적용
+    leg.get_frame().set_boxstyle("round,pad=0.5,rounding_size=0.4")
+    leg.get_frame().set_linewidth(1.0)
+    
+    # 말풍선과 통일된 플로팅(공중에 뜬) 그림자 효과
+    leg.get_frame().set_path_effects([
+        pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.06),
+        pe.Normal()
+    ])
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
