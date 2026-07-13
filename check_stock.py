@@ -59,15 +59,15 @@ def draw_graph(full_history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 역대 최저가 및 날짜 추출
+    # 역대 최저가 및 날짜 추출 (그래프 스케일을 위해 1000으로 나눔)
     all_time_min_item = min(full_history, key=lambda x: x['price'])
-    all_time_min = all_time_min_item['price']
+    all_time_min = all_time_min_item['price'] / 1000.0
     all_time_min_date = all_time_min_item['timestamp'][:10]
     
-    # 그래프에 표시할 최근 14일 데이터만 필터링
+    # 그래프에 표시할 최근 3주(21일) 데이터만 필터링
     now_kst = datetime.utcnow() + timedelta(hours=9)
-    fourteen_days_ago = now_kst - timedelta(days=14)
-    history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+    target_days_ago = now_kst - timedelta(days=21)
+    history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
     colors = {"daypack": "#2563eb", "allday": "#ea580c"}
     
@@ -77,7 +77,8 @@ def draw_graph(full_history):
         if name not in daily_stats:
             continue
         date_str = item['timestamp'][:10]
-        price = item['price']
+        # 💡 [반영] 금액을 1000단위로 축소
+        price = item['price'] / 1000.0
         
         if date_str not in daily_stats[name]:
             daily_stats[name][date_str] = {'min': price, 'max': price, 'last': price}
@@ -131,7 +132,7 @@ def draw_graph(full_history):
             else:
                 xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
 
-            ann = plt.annotate(f"{txt:,} w", (dates[i], lasts[i]), 
+            ann = plt.annotate(f"{txt:,.0f}", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
@@ -141,53 +142,44 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
     
-    y_max = max(all_prices) if all_prices else 150000
+    y_max = max(all_prices) if all_prices else 150
+    top_limit = max(y_max * 1.05, 155)
     
-    # 💡 [여백 확보] 목표가 라인과 고급화된 범례가 들어갈 공간을 확보하기 위해 상단 리미트를 늘림
-    top_limit = max(y_max * 1.08, 155000)
-    
-    # 역대 최저가가 12만 원보다 낮을 경우 하단 범위를 자동으로 늘려 선이 보이게 조정
-    bottom_limit = min(120000, all_time_min - 2000)
+    # 하단 범위 조정 (120을 120,000원으로 간주)
+    bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
-    # 역대 최저가 진한 회색 실선
-    plt.axhline(y=all_time_min, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
-    ax.text(0.02, all_time_min + 800, f'All-Time Low ({all_time_min:,} won) on {all_time_min_date}', 
-            color='#475569', fontweight='bold', fontsize=9, 
+    # 역대 최저가 연한 회색 점선
+    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
+    ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
+            color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 연한 회색 점선
-    target_price = 150000
-    plt.axhline(y=target_price, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
-    ax.text(0.02, target_price + 1000, 'Target (150,000 won)', 
-            color='#94a3b8', fontweight='bold', fontsize=10, 
+    # 목표가 진한 회색 실선 (150 = 150,000원)
+    target_price = 150
+    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
+    ax.text(0.02, target_price + 1.0, 'Target (150k)', 
+            color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('Daily Final Price & Range (Recent 14 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
-    plt.ylabel('Price (KRW)', fontsize=10, fontweight='500', color='#64748b')
+    # 💡 [반영] 기간 3주 반영 (Title)
+    plt.title('Daily Final Price & Range (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    # 💡 [반영] 단위 천 원 반영 (Y-axis label)
+    plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    ax.xaxis.set_major_locator(mdates.DayLocator())
+    # X축 눈금 설정: 21일의 경우 텍스트가 겹치지 않게 간격을 자동으로 조절
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(dates) <= 21 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.gcf().autofmt_xdate(rotation=45)
+    plt.gcf().autofmt_xdate(rotation=45) 
     
     ax.tick_params(colors='#64748b', labelsize=9)
     
-    # 💡 [반영] 범례(Legend)를 프리미엄 UI 스타일로 세련되게 변경
-    leg = plt.legend(loc='upper right', frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1', 
-                     fontsize=9.5, labelcolor='#334155', borderpad=0.7, handletextpad=0.6, handlelength=1.5)
-    
-    # 둥근 모서리 적용
-    leg.get_frame().set_boxstyle("round,pad=0.5,rounding_size=0.4")
-    leg.get_frame().set_linewidth(1.0)
-    
-    # 말풍선과 통일된 플로팅(공중에 뜬) 그림자 효과
-    leg.get_frame().set_path_effects([
-        pe.SimplePatchShadow(offset=(1.5, -1.5), shadow_rgbFace='#0f172a', alpha=0.06),
-        pe.Normal()
-    ])
+    # 💡 [반영] 범례 원래 스타일로 원복
+    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
+               fontsize=9, labelcolor='#334155', borderpad=0.8)
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
@@ -245,9 +237,9 @@ def get_lowest_price():
             item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             is_new_record = False
             
-            # 2주 최저가 비교 (메시지용)
-            fourteen_days_ago = now_kst - timedelta(days=14)
-            recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+            # 💡 [반영] 3주(21일) 최저가 비교
+            target_days_ago = now_kst - timedelta(days=21)
+            recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
             
             if recent_item_history:
                 prev_lowest_item = min(recent_item_history, key=lambda x: x['price'])
@@ -262,9 +254,10 @@ def get_lowest_price():
                 'text': price_text
             })
             
-            updated_recent = [x for x in history if x.get('item', 'daypack') == item_name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > fourteen_days_ago]
+            updated_recent = [x for x in history if x.get('item', 'daypack') == item_name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
             lowest_item = min(updated_recent, key=lambda x: x['price'])
             
+            # 텔레그램 메시지용으로는 원래 가격(raw_price)을 유지
             current_results[item_name] = {
                 'curr_price': clean_price,
                 'low_price': lowest_item['price'],
@@ -279,7 +272,7 @@ def get_lowest_price():
 
         if new_records_triggered:
             items_str = ", ".join(new_records_triggered)
-            header = f"💥💣 <b>[2주 최저가 갱신 ({items_str})!!]</b> 💣💥\n"
+            header = f"💥💣 <b>[3주 최저가 갱신 ({items_str})!!]</b> 💣💥\n"
         else:
             header = ""
 
@@ -287,7 +280,8 @@ def get_lowest_price():
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
             msg += f"알림시각 : {time_str}\n"
-            msg += "상품가격(현재가/2주 최저가)\n"
+            # 💡 [반영] 메시지 텍스트에서도 3주로 변경
+            msg += "상품가격(현재가/3주 최저가)\n"
             for name in ["daypack", "allday"]:
                 res = current_results[name]
                 msg += f"-{name.upper()} : {res['curr_price']:,} / {res['low_price']:,}\n"
