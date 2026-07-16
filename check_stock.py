@@ -13,10 +13,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 모니터링할 아이템 이름과 다나와 주소 정의
+# 💡 [업데이트] 모니터링할 3개의 아이템 이름과 다나와 주소 정의
 ITEMS_INFO = {
     "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
-    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A"
+    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
+    "daynhalf": "https://search.danawa.com/dsearch.php?query=09J29453&originalQuery=09J29453&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N"
 }
 
 def draw_graph(full_history):
@@ -46,15 +47,15 @@ def draw_graph(full_history):
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    colors = {"daypack": "#2563eb", "allday": "#ea580c"}
+    # 💡 [업데이트] DAYnHALF를 위한 세 번째 컬러(에메랄드 그린) 추가
+    colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
     
-    daily_stats = {"daypack": {}, "allday": {}}
+    daily_stats = {name: {} for name in colors.keys()}
     for item in history:
         name = item.get('item', 'daypack')
         if name not in daily_stats:
             continue
         date_str = item['timestamp'][:10]
-        # 금액을 천 단위로 축소
         price = item['price'] / 1000.0
         
         if date_str not in daily_stats[name]:
@@ -79,7 +80,7 @@ def draw_graph(full_history):
         
         all_prices.extend(maxs) 
         
-        # 💡 [반영] 최저-최고 범위 직선 대역 (곡선 함수 제거)
+        # 최저-최고 범위 직선 대역
         plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
         
         # 마지막 관측 가격 메인 실선
@@ -91,20 +92,26 @@ def draw_graph(full_history):
         for i, txt in enumerate(lasts):
             date_str = sorted_dates[i]
             my_price = lasts[i]
-            other_item = "allday" if item_name == "daypack" else "daypack"
             
-            if other_item in daily_stats and date_str in daily_stats[other_item]:
-                other_price = daily_stats[other_item][date_str]['last']
-                if my_price > other_price:
-                    xy_offset = (0, 9)
-                elif my_price < other_price:
-                    xy_offset = (0, -16)
-                else:
-                    xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
-            else:
-                xy_offset = (0, 9) if item_name == "daypack" else (0, -16)
+            # 💡 [업데이트] 3개 아이템 겹침 방지 로직 (상/중/하 분리 배치)
+            higher_count = 0
+            for nm in colors.keys():
+                if nm != item_name and nm in daily_stats and date_str in daily_stats[nm]:
+                    other_price = daily_stats[nm][date_str]['last']
+                    if other_price > my_price:
+                        higher_count += 1
+                    elif other_price == my_price:
+                        # 가격이 완벽히 같을 경우 알파벳 순서로 강제 등수 지정
+                        if nm > item_name:
+                            higher_count += 1
 
-            # 💡 [반영] 텍스트 끝에 'k' 문자열 추가
+            if higher_count == 0:
+                xy_offset = (0, 9)       # 가장 높은 가격은 위로
+            elif higher_count == 1:
+                xy_offset = (0, -15)     # 중간 가격은 아래로
+            else:
+                xy_offset = (0, -28)     # 가장 낮은 가격은 더 아래로
+
             ann = plt.annotate(f"{txt:,.0f}k", (dates[i], lasts[i]), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
@@ -118,7 +125,7 @@ def draw_graph(full_history):
     y_max = max(all_prices) if all_prices else 150
     top_limit = max(y_max * 1.05, 155)
     
-    # 하단 범위 조정 (120을 120,000원으로 간주)
+    # 하단 범위 조정
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
@@ -128,7 +135,7 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선 (150 = 150,000원)
+    # 목표가 진한 회색 실선
     target_price = 150
     plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
@@ -141,14 +148,12 @@ def draw_graph(full_history):
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(dates) <= 21 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
     
     ax.tick_params(colors='#64748b', labelsize=9)
     
-    # 범례 원래 스타일
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
@@ -208,7 +213,6 @@ def get_lowest_price():
             item_history = [x for x in history if x.get('item', 'daypack') == item_name]
             is_new_record = False
             
-            # 3주(21일) 최저가 비교
             target_days_ago = now_kst - timedelta(days=21)
             recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
             
@@ -228,7 +232,6 @@ def get_lowest_price():
             updated_recent = [x for x in history if x.get('item', 'daypack') == item_name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
             lowest_item = min(updated_recent, key=lambda x: x['price'])
             
-            # 텔레그램 메시지용으로는 원래 가격(raw_price)을 유지
             current_results[item_name] = {
                 'curr_price': clean_price,
                 'low_price': lowest_item['price'],
@@ -238,7 +241,6 @@ def get_lowest_price():
         with open(history_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
-        # 전체 히스토리를 그래프 함수로 넘김
         graph_file = draw_graph(history)
 
         if new_records_triggered:
@@ -247,25 +249,28 @@ def get_lowest_price():
         else:
             header = ""
 
+        # 💡 [업데이트] 3가지 아이템 모두 메시지에 출력
         def format_message(title):
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
             msg += f"알림시각 : {time_str}\n"
             msg += "상품가격(현재가/3주 최저가)\n"
-            for name in ["daypack", "allday"]:
-                res = current_results[name]
-                msg += f"-{name.upper()} : {res['curr_price']:,} / {res['low_price']:,}\n"
+            for name in ["daypack", "allday", "daynhalf"]:
+                if name in current_results:
+                    res = current_results[name]
+                    msg += f"-{name.upper()} : {res['curr_price']:,} / {res['low_price']:,}\n"
             return msg.strip()
             
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
-        reply_markup = {
-            "inline_keyboard": [
-                [{"text": "🛒 DAYPACK 최저가 바로가기", "url": current_results['daypack']['buy_url']}],
-                [{"text": "🛒 ALLDAY 최저가 바로가기", "url": current_results['allday']['buy_url']}]
-            ]
-        }
+        # 💡 [업데이트] 버튼 메뉴도 3가지 항목 모두 생성
+        inline_keyboard = []
+        for name in ["daypack", "allday", "daynhalf"]:
+            if name in current_results:
+                inline_keyboard.append([{"text": f"🛒 {name.upper()} 최저가 바로가기", "url": current_results[name]['buy_url']}])
+                
+        reply_markup = {"inline_keyboard": inline_keyboard}
         
         if is_regular_report:
             return [
