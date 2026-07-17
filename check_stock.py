@@ -136,7 +136,7 @@ def draw_graph(full_history):
                         elif other_price == txt and nm > item_name:
                             higher_count += 1
                             
-            # 💡 [핵심] 위치에 따라 가격 말풍선(price)과 시간 텍스트(time)의 좌표 분리
+            # 위치에 따라 가격 말풍선과 시간 텍스트 좌표 분리
             if higher_count == 0:
                 xy_offset_price = (0, 16)
                 xy_offset_time = (0, 6)
@@ -147,7 +147,7 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선 그리기
+            # 가격 말풍선
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
@@ -157,11 +157,10 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            # 💡 [핵심] 시간 텍스트 그리기 (회색, 작은 폰트, 외곽선 효과)
+            # 시간 텍스트 (회색, 작은 폰트, 외곽선 효과)
             time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
                          ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
-            # 선이나 점과 겹칠 때 글씨를 보호하는 하얀 테두리 효과
             time_ann.set_path_effects([
                 pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.85)
             ])
@@ -188,11 +187,14 @@ def draw_graph(full_history):
     
     plt.title('All Observations & Daily Lowest Points (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
-    plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
+    
+    # 💡 [핵심] Y축 점선 그리드와 X축 정각(00:00) 기준 흰색 세로선 그리드 적용
+    ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
+    ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=2.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정
+    # X축 눈금 설정: 눈금이 정각(00:00)에 찍히므로, 흰색 세로선이 정확히 자정에 그어짐
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(history) <= 42 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
