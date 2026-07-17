@@ -91,11 +91,11 @@ def draw_graph(full_history):
             
             plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
             
-        # 💡 [디자인 트릭] 범례(Legend)에 점과 선이 모두 나오도록 가짜(Dummy) 선을 하나 그려줍니다.
+        # 범례(Legend)에 점과 선이 모두 나오도록 가짜(Dummy) 선 그리기
         plt.plot([], [], marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
                  
-        # 2. 💡 [수정됨] 모든 관측 가격 메인 실선 (마커 없음)
+        # 2. 모든 관측 가격 메인 실선 (마커 없음)
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
         
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
@@ -111,23 +111,23 @@ def draw_graph(full_history):
         annot_indices = set()
         for d_str, indices in day_to_indices.items():
             min_p = min(e_prices[i] for i in indices)
-            # 해당 일자에서 최저가(min_p)를 기록한 관측치 중 가장 마지막 인덱스 추출
             last_min_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.add(last_min_idx)
         
-        # 3. 💡 [수정됨] 선별된 포인트(일일 마지막 최저가)에만 '점(Dot)'과 '라벨' 부착
+        # 3. 선별된 포인트(일일 마지막 최저가)에만 '점(Dot)', '라벨', '시간' 부착
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
+            time_str = dt_obj.strftime('%H:%M') # HH:MM 포맷 추출
             
-            # 여기서 콕 집어서 점(Marker)을 그려줍니다.
+            # 점(Marker)
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
             
+            # 겹침 방지 순위 계산
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
-                    # 해당 시점까지의 타 제품 마지막 가격을 확인하여 겹침 방지 순위 계산
                     nm_prices_before = [p for d, p in exact_stats[nm] if d <= dt_obj]
                     if nm_prices_before:
                         other_price = nm_prices_before[-1]
@@ -136,21 +136,34 @@ def draw_graph(full_history):
                         elif other_price == txt and nm > item_name:
                             higher_count += 1
                             
+            # 💡 [핵심] 위치에 따라 가격 말풍선(price)과 시간 텍스트(time)의 좌표 분리
             if higher_count == 0:
-                xy_offset = (0, 9)
+                xy_offset_price = (0, 16)
+                xy_offset_time = (0, 6)
             elif higher_count == 1:
-                xy_offset = (0, -15)
+                xy_offset_price = (0, -14)
+                xy_offset_time = (0, -23)
             else:
-                xy_offset = (0, -28)
+                xy_offset_price = (0, -36)
+                xy_offset_time = (0, -45)
 
+            # 가격 말풍선 그리기
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
-                         textcoords="offset points", xytext=xy_offset, 
+                         textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
-            
             ann.get_bbox_patch().set_path_effects([
                 pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.05),
                 pe.Normal()
+            ])
+            
+            # 💡 [핵심] 시간 텍스트 그리기 (회색, 작은 폰트, 외곽선 효과)
+            time_ann = plt.annotate(time_str, (dt_obj, txt), 
+                         textcoords="offset points", xytext=xy_offset_time, 
+                         ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
+            # 선이나 점과 겹칠 때 글씨를 보호하는 하얀 테두리 효과
+            time_ann.set_path_effects([
+                pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.85)
             ])
     
     y_max = max(all_prices) if all_prices else 150
