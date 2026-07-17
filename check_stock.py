@@ -60,7 +60,7 @@ def draw_graph(full_history):
         date_str = dt_str[:10]
         price = item['price'] / 1000.0
         
-        # 💡 [핵심] 모든 관측 데이터 수집
+        # 모든 관측 데이터 수집
         dt_obj = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
         exact_stats[name].append((dt_obj, price))
         
@@ -82,7 +82,7 @@ def draw_graph(full_history):
         e_prices = [x[1] for x in exact_stats[item_name]]
         all_prices.extend(e_prices)
         
-        # 1. 최저-최고 범위 직선 대역 (곡선 함수 제거됨)
+        # 1. 최저-최고 범위 직선 대역
         if daily_stats[item_name]:
             sorted_dates = sorted(daily_stats[item_name].keys())
             mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
@@ -91,13 +91,16 @@ def draw_graph(full_history):
             
             plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
             
-        # 2. 모든 관측 가격 메인 실선
-        plt.plot(e_dates, e_prices, marker='o', color=line_color, linewidth=1.0, 
+        # 💡 [디자인 트릭] 범례(Legend)에 점과 선이 모두 나오도록 가짜(Dummy) 선을 하나 그려줍니다.
+        plt.plot([], [], marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
+                 
+        # 2. 💡 [수정됨] 모든 관측 가격 메인 실선 (마커 없음)
+        plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
         
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
         
-        # 💡 [로직 추가] 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
+        # 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
         day_to_indices = {}
         for i, dt in enumerate(e_dates):
             d_str = dt.strftime('%Y-%m-%d')
@@ -112,10 +115,14 @@ def draw_graph(full_history):
             last_min_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.add(last_min_idx)
         
-        # 3. 선별된 포인트(일일 최종 최저가)에만 라벨 부착
+        # 3. 💡 [수정됨] 선별된 포인트(일일 마지막 최저가)에만 '점(Dot)'과 '라벨' 부착
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
+            
+            # 여기서 콕 집어서 점(Marker)을 그려줍니다.
+            plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
+                     markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
             
             higher_count = 0
             for nm in colors.keys():
@@ -166,13 +173,13 @@ def draw_graph(full_history):
             color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('All Observations & Daily Range (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.title('All Observations & Daily Lowest Points (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
+    # X축 눈금 설정
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(history) <= 42 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
