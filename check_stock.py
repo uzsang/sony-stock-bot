@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 💡 [업데이트] 모니터링할 3개의 아이템 이름과 다나와 주소 정의
+# 모니터링할 3개의 아이템 이름과 다나와 주소 정의
 ITEMS_INFO = {
     "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
@@ -47,72 +47,96 @@ def draw_graph(full_history):
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    # 💡 [업데이트] DAYnHALF를 위한 세 번째 컬러(에메랄드 그린) 추가
     colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
     
+    exact_stats = {name: [] for name in colors.keys()}
     daily_stats = {name: {} for name in colors.keys()}
+    
     for item in history:
         name = item.get('item', 'daypack')
-        if name not in daily_stats:
+        if name not in colors:
             continue
-        date_str = item['timestamp'][:10]
+        dt_str = item['timestamp']
+        date_str = dt_str[:10]
         price = item['price'] / 1000.0
         
+        # 💡 [핵심] 모든 관측 데이터 수집
+        dt_obj = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+        exact_stats[name].append((dt_obj, price))
+        
+        # 범위 밴드를 위한 일일 최저/최고가 수집
         if date_str not in daily_stats[name]:
-            daily_stats[name][date_str] = {'min': price, 'max': price, 'last': price}
+            daily_stats[name][date_str] = {'min': price, 'max': price}
         else:
             daily_stats[name][date_str]['min'] = min(daily_stats[name][date_str]['min'], price)
             daily_stats[name][date_str]['max'] = max(daily_stats[name][date_str]['max'], price)
-            daily_stats[name][date_str]['last'] = price
 
     all_prices = []
     
     for item_name, line_color in colors.items():
-        if not daily_stats[item_name]:
+        if not exact_stats[item_name]:
             continue
             
-        sorted_dates = sorted(daily_stats[item_name].keys())
-        mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
-        maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
-        lasts = [daily_stats[item_name][d]['last'] for d in sorted_dates]
+        exact_stats[item_name].sort(key=lambda x: x[0])
+        e_dates = [x[0] for x in exact_stats[item_name]]
+        e_prices = [x[1] for x in exact_stats[item_name]]
+        all_prices.extend(e_prices)
         
-        dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
-        
-        all_prices.extend(maxs) 
-        
-        # 최저-최고 범위 직선 대역
-        plt.fill_between(dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
-        
-        # 마지막 관측 가격 메인 실선
-        plt.plot(dates, lasts, marker='o', color=line_color, linewidth=1.0, 
+        # 1. 최저-최고 범위 직선 대역 (곡선 함수 제거됨)
+        if daily_stats[item_name]:
+            sorted_dates = sorted(daily_stats[item_name].keys())
+            mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
+            maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
+            d_dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+            
+            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
+            
+        # 2. 모든 관측 가격 메인 실선
+        plt.plot(e_dates, e_prices, marker='o', color=line_color, linewidth=1.0, 
                  markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
         
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
         
-        for i, txt in enumerate(lasts):
-            date_str = sorted_dates[i]
-            my_price = lasts[i]
+        # 💡 [로직 추가] 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
+        day_to_indices = {}
+        for i, dt in enumerate(e_dates):
+            d_str = dt.strftime('%Y-%m-%d')
+            if d_str not in day_to_indices:
+                day_to_indices[d_str] = []
+            day_to_indices[d_str].append(i)
             
-            # 💡 [업데이트] 3개 아이템 겹침 방지 로직 (상/중/하 분리 배치)
+        annot_indices = set()
+        for d_str, indices in day_to_indices.items():
+            min_p = min(e_prices[i] for i in indices)
+            # 해당 일자에서 최저가(min_p)를 기록한 관측치 중 가장 마지막 인덱스 추출
+            last_min_idx = [i for i in indices if e_prices[i] == min_p][-1]
+            annot_indices.add(last_min_idx)
+        
+        # 3. 선별된 포인트(일일 최종 최저가)에만 라벨 부착
+        for i in annot_indices:
+            txt = e_prices[i]
+            dt_obj = e_dates[i]
+            
             higher_count = 0
             for nm in colors.keys():
-                if nm != item_name and nm in daily_stats and date_str in daily_stats[nm]:
-                    other_price = daily_stats[nm][date_str]['last']
-                    if other_price > my_price:
-                        higher_count += 1
-                    elif other_price == my_price:
-                        # 가격이 완벽히 같을 경우 알파벳 순서로 강제 등수 지정
-                        if nm > item_name:
+                if nm != item_name and exact_stats[nm]:
+                    # 해당 시점까지의 타 제품 마지막 가격을 확인하여 겹침 방지 순위 계산
+                    nm_prices_before = [p for d, p in exact_stats[nm] if d <= dt_obj]
+                    if nm_prices_before:
+                        other_price = nm_prices_before[-1]
+                        if other_price > txt:
                             higher_count += 1
-
+                        elif other_price == txt and nm > item_name:
+                            higher_count += 1
+                            
             if higher_count == 0:
-                xy_offset = (0, 9)       # 가장 높은 가격은 위로
+                xy_offset = (0, 9)
             elif higher_count == 1:
-                xy_offset = (0, -15)     # 중간 가격은 아래로
+                xy_offset = (0, -15)
             else:
-                xy_offset = (0, -28)     # 가장 낮은 가격은 더 아래로
+                xy_offset = (0, -28)
 
-            ann = plt.annotate(f"{txt:,.0f}k", (dates[i], lasts[i]), 
+            ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props)
@@ -125,7 +149,7 @@ def draw_graph(full_history):
     y_max = max(all_prices) if all_prices else 150
     top_limit = max(y_max * 1.05, 155)
     
-    # 하단 범위 조정
+    # 하단 범위 조정 (120을 120,000원으로 간주)
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
@@ -135,20 +159,21 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선
+    # 목표가 진한 회색 실선 (150 = 150,000원)
     target_price = 150
     plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
             color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('Daily Final Price & Range (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.title('All Observations & Daily Range (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     plt.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(dates) <= 21 else 2))
+    # X축 눈금 설정: 모든 일자(Day)를 표기하도록 강제 지정
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(history) <= 42 else 2))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
     
@@ -249,7 +274,6 @@ def get_lowest_price():
         else:
             header = ""
 
-        # 💡 [업데이트] 3가지 아이템 모두 메시지에 출력
         def format_message(title):
             time_str = now_kst.strftime('%y%m%d %H:%M')
             msg = f"{header}<b>{title}</b>\n\n"
@@ -264,7 +288,6 @@ def get_lowest_price():
         cron_trigger = os.environ.get('CRON_TRIGGER', '')
         is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
-        # 💡 [업데이트] 버튼 메뉴도 3가지 항목 모두 생성
         inline_keyboard = []
         for name in ["daypack", "allday", "daynhalf"]:
             if name in current_results:
