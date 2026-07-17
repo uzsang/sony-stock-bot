@@ -188,14 +188,14 @@ def draw_graph(full_history):
     plt.title('All Observations & Daily Lowest Points (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     
-    # 💡 [핵심] Y축 점선 그리드와 X축 정각(00:00) 기준 흰색 세로선 그리드 적용
+    # 💡 [반영] 흰색 세로선(x축 그리드)의 두께를 2.0에서 1.0으로 얇게 조절
     ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
-    ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=2.0)
+    ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 설정: 눈금이 정각(00:00)에 찍히므로, 흰색 세로선이 정확히 자정에 그어짐
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1 if len(history) <= 42 else 2))
+    # 💡 [반영] X축 눈금 간격을 강제로 1일(interval=1)로 고정하여 홀수/짝수 일자 모두 표기
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
     
