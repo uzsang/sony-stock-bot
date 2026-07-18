@@ -118,23 +118,25 @@ def draw_graph(full_history):
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
-            time_str = dt_obj.strftime('%H:%M') # HH:MM 포맷 추출
+            time_str = dt_obj.strftime('%H:%M') 
             
             # 점(Marker)
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
             
-            # 겹침 방지 순위 계산
+            # 💡 [핵심 수정] 타 제품과 가격 차이가 15(15,000원) 미만으로 '가까울 때만' 피하도록 변경
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
                     nm_prices_before = [p for d, p in exact_stats[nm] if d <= dt_obj]
                     if nm_prices_before:
                         other_price = nm_prices_before[-1]
-                        if other_price > txt:
-                            higher_count += 1
-                        elif other_price == txt and nm > item_name:
-                            higher_count += 1
+                        # 가격이 위아래로 가까울 때만 겹침 방지 발동!
+                        if abs(other_price - txt) < 15:
+                            if other_price > txt:
+                                higher_count += 1
+                            elif other_price == txt and nm > item_name:
+                                higher_count += 1
                             
             # 위치에 따라 가격 말풍선과 시간 텍스트 좌표 분리
             if higher_count == 0:
@@ -157,7 +159,7 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            # 시간 텍스트 (회색, 작은 폰트, 외곽선 효과)
+            # 시간 텍스트
             time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
                          ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
@@ -178,7 +180,7 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선 (150 = 150,000원)
+    # 목표가 진한 회색 실선
     target_price = 150
     plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
@@ -188,13 +190,13 @@ def draw_graph(full_history):
     plt.title('All Observations & Daily Lowest Points (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     
-    # 💡 [반영] 흰색 세로선(x축 그리드)의 두께를 2.0에서 1.0으로 얇게 조절
+    # Y축 점선 그리드와 X축 정각(00:00) 기준 얇은 흰색 세로선
     ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # 💡 [반영] X축 눈금 간격을 강제로 1일(interval=1)로 고정하여 홀수/짝수 일자 모두 표기
+    # X축 눈금 간격 1일 고정 (홀수/짝수 모두 표시)
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
