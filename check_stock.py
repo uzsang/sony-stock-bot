@@ -108,37 +108,47 @@ def draw_graph(full_history):
                 day_to_indices[d_str] = []
             day_to_indices[d_str].append(i)
             
-        annot_indices = set()
-        for d_str, indices in day_to_indices.items():
+        daily_last_min_indices = []
+        for d_str in sorted(day_to_indices.keys()):
+            indices = day_to_indices[d_str]
             min_p = min(e_prices[i] for i in indices)
             last_min_idx = [i for i in indices if e_prices[i] == min_p][-1]
-            annot_indices.add(last_min_idx)
+            daily_last_min_indices.append(last_min_idx)
+            
+        # 동일 가격 연속 시 가로 겹침 방지 필터링
+        annot_indices = []
+        for i, idx in enumerate(daily_last_min_indices):
+            if i == len(daily_last_min_indices) - 1:
+                annot_indices.append(idx)
+            else:
+                next_idx = daily_last_min_indices[i+1]
+                if e_prices[idx] != e_prices[next_idx]:
+                    annot_indices.append(idx)
         
-        # 3. 선별된 포인트(일일 마지막 최저가)에만 '점(Dot)', '라벨', '시간' 부착
+        # 3. 스마트하게 선별된 포인트에만 '점(Dot)', '라벨', '시간' 부착
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
-            time_str = dt_obj.strftime('%H:%M') 
+            time_str = dt_obj.strftime('%H:%M')
             
             # 점(Marker)
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
             
-            # 💡 [핵심 수정] 타 제품과 가격 차이가 15(15,000원) 미만으로 '가까울 때만' 피하도록 변경
+            # 다른 아이템과 세로로 겹치지 않도록 방지하는 순위 계산 (가격이 15k 차이 이내일 때만 피함)
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
                     nm_prices_before = [p for d, p in exact_stats[nm] if d <= dt_obj]
                     if nm_prices_before:
                         other_price = nm_prices_before[-1]
-                        # 가격이 위아래로 가까울 때만 겹침 방지 발동!
                         if abs(other_price - txt) < 15:
                             if other_price > txt:
                                 higher_count += 1
                             elif other_price == txt and nm > item_name:
                                 higher_count += 1
                             
-            # 위치에 따라 가격 말풍선과 시간 텍스트 좌표 분리
+            # 위치에 따라 가격 말풍선과 시간 텍스트 좌표 상/중/하 분리
             if higher_count == 0:
                 xy_offset_price = (0, 16)
                 xy_offset_time = (0, 6)
@@ -159,7 +169,7 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            # 시간 텍스트
+            # 시간 텍스트 (회색, 작은 폰트, 외곽선 효과)
             time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
                          ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
@@ -180,7 +190,7 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선
+    # 목표가 진한 회색 실선 (150 = 150,000원)
     target_price = 150
     plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
