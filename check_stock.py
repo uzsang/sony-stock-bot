@@ -98,7 +98,8 @@ def draw_graph(full_history):
         # 2. 모든 관측 가격 메인 실선 (마커 없음)
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
         
-        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec=line_color, lw=1.0, alpha=0.8)
+        # 💡 [반영] bbox 테두리(edgecolor) 제거 및 미니멀화
+        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.8)
         
         # 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
         day_to_indices = {}
@@ -108,24 +109,14 @@ def draw_graph(full_history):
                 day_to_indices[d_str] = []
             day_to_indices[d_str].append(i)
             
-        daily_last_min_indices = []
-        for d_str in sorted(day_to_indices.keys()):
-            indices = day_to_indices[d_str]
+        # 💡 [원복 반영] 동일 가격 연속 방지 필터(스트릭)를 제거하고 다시 모든 일자별 최저가를 선별
+        annot_indices = set()
+        for d_str, indices in day_to_indices.items():
             min_p = min(e_prices[i] for i in indices)
             last_min_idx = [i for i in indices if e_prices[i] == min_p][-1]
-            daily_last_min_indices.append(last_min_idx)
-            
-        # 동일 가격 연속 시 가로 겹침 방지 필터링
-        annot_indices = []
-        for i, idx in enumerate(daily_last_min_indices):
-            if i == len(daily_last_min_indices) - 1:
-                annot_indices.append(idx)
-            else:
-                next_idx = daily_last_min_indices[i+1]
-                if e_prices[idx] != e_prices[next_idx]:
-                    annot_indices.append(idx)
+            annot_indices.add(last_min_idx)
         
-        # 3. 스마트하게 선별된 포인트에만 '점(Dot)', '라벨', '시간' 부착
+        # 3. 선별된 포인트(일일 마지막 최저가)에만 '점(Dot)', '라벨', '시간' 부착
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
@@ -159,7 +150,7 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선
+            # 가격 말풍선 (테두리 없음)
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
