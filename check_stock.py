@@ -98,8 +98,8 @@ def draw_graph(full_history):
         # 2. 모든 관측 가격 메인 실선 (마커 없음)
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
         
-        # 💡 [반영] bbox 테두리(edgecolor) 제거 및 미니멀화
-        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.8)
+        # 💡 [투명도 증가] bbox 테두리 없음 + 투명도를 0.8에서 0.5로 대폭 증가
+        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.5)
         
         # 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
         day_to_indices = {}
@@ -109,7 +109,6 @@ def draw_graph(full_history):
                 day_to_indices[d_str] = []
             day_to_indices[d_str].append(i)
             
-        # 💡 [원복 반영] 동일 가격 연속 방지 필터(스트릭)를 제거하고 다시 모든 일자별 최저가를 선별
         annot_indices = set()
         for d_str, indices in day_to_indices.items():
             min_p = min(e_prices[i] for i in indices)
@@ -126,7 +125,7 @@ def draw_graph(full_history):
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
             
-            # 다른 아이템과 세로로 겹치지 않도록 방지하는 순위 계산 (가격이 15k 차이 이내일 때만 피함)
+            # 다른 아이템과 세로로 겹치지 않도록 방지하는 순위 계산
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
@@ -150,7 +149,7 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선 (테두리 없음)
+            # 가격 말풍선 (반투명 효과 적용)
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
@@ -160,7 +159,7 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            # 시간 텍스트 (회색, 작은 폰트, 외곽선 효과)
+            # 시간 텍스트
             time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
                          ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
@@ -181,7 +180,7 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선 (150 = 150,000원)
+    # 목표가 진한 회색 실선
     target_price = 150
     plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
@@ -197,7 +196,7 @@ def draw_graph(full_history):
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 간격 1일 고정 (홀수/짝수 모두 표시)
+    # X축 눈금 간격 1일 고정
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
