@@ -98,7 +98,7 @@ def draw_graph(full_history):
         # 2. 모든 관측 가격 메인 실선 (마커 없음)
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
         
-        # 💡 [투명도 증가] bbox 테두리 없음 + 투명도를 0.8에서 0.5로 대폭 증가
+        # bbox 테두리 없음 + 투명도를 0.5로 설정
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.5)
         
         # 날짜별로 인덱스를 묶고, 그날의 최저가 중 '마지막' 관측치만 선별
@@ -149,20 +149,20 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선 (반투명 효과 적용)
+            # 💡 [핵심] 가격 말풍선에 45도 반시계방향 회전(rotation=45) 적용
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
-                         bbox=bbox_props)
+                         bbox=bbox_props, rotation=45)
             ann.get_bbox_patch().set_path_effects([
                 pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.05),
                 pe.Normal()
             ])
             
-            # 시간 텍스트
+            # 💡 [핵심] 시간 텍스트에도 45도 반시계방향 회전(rotation=45) 적용
             time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
-                         ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9)
+                         ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9, rotation=45)
             time_ann.set_path_effects([
                 pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.85)
             ])
