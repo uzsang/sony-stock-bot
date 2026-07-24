@@ -101,18 +101,31 @@ def draw_graph(full_history):
         # bbox 테두리 없음 + 투명도를 0.5로 설정
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.5)
         
-        # 💡 [핵심 변경] 일별 최저가 필터링을 제거하고, '가격 상승 직전' 포인트만 핀셋으로 집어냅니다.
-        annot_indices = set()
+        # 💡 [핵심 변경] 1차 필터링: '가격 상승 직전(저점)' 포인트 및 '마지막' 관측치 선별
+        candidate_indices = set()
         for i in range(len(e_prices) - 1):
-            # 다음 관측치에서 가격이 올랐다면, 현재 인덱스가 바로 '상승 전 가격(저점)'
             if e_prices[i] < e_prices[i+1]:
-                annot_indices.add(i)
+                candidate_indices.add(i)
                 
-        # 가장 마지막 관측치는 현재 상태 파악을 위해 무조건 표시해 줍니다.
         if e_prices:
-            annot_indices.add(len(e_prices) - 1)
+            candidate_indices.add(len(e_prices) - 1)
+            
+        # 💡 [핵심 변경] 2차 필터링: 같은 날짜에 여러 후보가 있다면 '최저가' 딱 하나만 남김
+        day_to_candidates = {}
+        for idx in candidate_indices:
+            d_str = e_dates[idx].strftime('%Y-%m-%d')
+            if d_str not in day_to_candidates:
+                day_to_candidates[d_str] = []
+            day_to_candidates[d_str].append(idx)
+            
+        annot_indices = set()
+        for d_str, indices in day_to_candidates.items():
+            min_p = min(e_prices[i] for i in indices)
+            # 동일한 최저가가 여러 개라면 가장 늦은 시간 선택
+            best_idx = [i for i in indices if e_prices[i] == min_p][-1]
+            annot_indices.add(best_idx)
         
-        # 3. 선별된 포인트(저점 & 마지막 관측치)에만 '점(Dot)', '라벨', '시간' 부착
+        # 3. 선별된 포인트(일일 상승 전 최저가)에만 '점(Dot)', '라벨', '시간' 부착
         for i in annot_indices:
             txt = e_prices[i]
             dt_obj = e_dates[i]
@@ -184,7 +197,7 @@ def draw_graph(full_history):
             color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('All Observations & Pre-Rise Lowest Points (Recent 21 Days)', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    plt.title('All Observations & Daily Lowest Pre-Rise Points', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     
     # Y축 점선 그리드와 X축 정각(00:00) 기준 얇은 흰색 세로선
