@@ -30,24 +30,32 @@ def draw_graph(full_history):
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
-    ax.set_facecolor('#f8f9fa')
-    plt.gcf().patch.set_facecolor('#ffffff')
+    # 💡 [DARK MODE] 다크 모드 색상 팔레트 정의
+    bg_color = '#0f172a'       # 깊은 네이비 (배경)
+    ax_bg_color = '#0f172a'
+    text_main = '#f8fafc'      # 밝은 화이트 (제목 등 메인 텍스트)
+    text_sub = '#94a3b8'       # 슬레이트 그레이 (축, 라벨 등 서브 텍스트)
+    grid_color = '#1e293b'     # 어두운 그리드 라인
+    spine_color = '#334155'    # 축 테두리
+    
+    ax.set_facecolor(ax_bg_color)
+    plt.gcf().patch.set_facecolor(bg_color)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('#e2e8f0')
-    ax.spines['bottom'].set_color('#e2e8f0')
+    ax.spines['left'].set_color(spine_color)
+    ax.spines['bottom'].set_color(spine_color)
     
-    # 역대 최저가 및 날짜 추출 (그래프 스케일을 위해 1000으로 나눔)
+    # 역대 최저가 및 날짜 추출
     all_time_min_item = min(full_history, key=lambda x: x['price'])
     all_time_min = all_time_min_item['price'] / 1000.0
     all_time_min_date = all_time_min_item['timestamp'][:10]
     
-    # 그래프에 표시할 최근 3주(21일) 데이터만 필터링
     now_kst = datetime.utcnow() + timedelta(hours=9)
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
+    # 💡 [DARK MODE] 어둠 속에서 빛나는 네온 톤으로 색상 변경
+    colors = {"daypack": "#60a5fa", "allday": "#fb923c", "daynhalf": "#34d399"}
     
     exact_stats = {name: [] for name in colors.keys()}
     daily_stats = {name: {} for name in colors.keys()}
@@ -60,11 +68,9 @@ def draw_graph(full_history):
         date_str = dt_str[:10]
         price = item['price'] / 1000.0
         
-        # 모든 관측 데이터 수집
         dt_obj = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
         exact_stats[name].append((dt_obj, price))
         
-        # 범위 밴드를 위한 일일 최저/최고가 수집
         if date_str not in daily_stats[name]:
             daily_stats[name][date_str] = {'min': price, 'max': price}
         else:
@@ -82,35 +88,34 @@ def draw_graph(full_history):
         e_prices = [x[1] for x in exact_stats[item_name]]
         all_prices.extend(e_prices)
         
-        # 1. 최저-최고 범위 직선 대역
+        # 최저-최고 범위 대역
         if daily_stats[item_name]:
             sorted_dates = sorted(daily_stats[item_name].keys())
             mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
             maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
             d_dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
             
-            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
+            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.1, edgecolor='none')
             
-        # 범례(Legend)에 점과 선이 모두 나오도록 가짜(Dummy) 선 그리기
-        plt.plot([], [], marker='o', color=line_color, linewidth=1.0, 
-                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0, label=item_name.upper())
+        # 가짜(Dummy) 선 그리기 (범례용)
+        plt.plot([], [], marker='o', color=line_color, linewidth=1.5, 
+                 markersize=4.5, markerfacecolor=bg_color, markeredgewidth=1.5, label=item_name.upper())
                  
-        # 2. 모든 관측 가격 메인 실선 (마커 없음)
-        plt.plot(e_dates, e_prices, color=line_color, linewidth=1.0)
+        # 메인 실선 그리기
+        plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
         
-        # bbox 테두리 없음 + 투명도를 0.5로 설정
-        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.5)
+        # 💡 [DARK MODE] 말풍선 스타일 다크 테마 적용
+        bbox_props = dict(boxstyle="round,pad=0.2", fc="#1e293b", ec="none", lw=0, alpha=0.85)
         
-        # 💡 [핵심 변경] 1차 필터링: '가격 상승 직전(저점)' 포인트 및 '마지막' 관측치 선별
+        # 1차 필터링: '가격 상승 직전(저점)' 포인트 및 '마지막' 관측치 선별
         candidate_indices = set()
         for i in range(len(e_prices) - 1):
             if e_prices[i] < e_prices[i+1]:
                 candidate_indices.add(i)
-                
         if e_prices:
             candidate_indices.add(len(e_prices) - 1)
             
-        # 💡 [핵심 변경] 2차 필터링: 같은 날짜에 여러 후보가 있다면 '최저가' 딱 하나만 남김
+        # 2차 필터링: 같은 날짜에 여러 후보가 있다면 '최저가' 딱 하나만 남김
         day_to_candidates = {}
         for idx in candidate_indices:
             d_str = e_dates[idx].strftime('%Y-%m-%d')
@@ -121,21 +126,31 @@ def draw_graph(full_history):
         annot_indices = set()
         for d_str, indices in day_to_candidates.items():
             min_p = min(e_prices[i] for i in indices)
-            # 동일한 최저가가 여러 개라면 가장 늦은 시간 선택
             best_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.add(best_idx)
+            
+        # 💡 [하락폭 계산] 시간순 정렬 후 이전 마커와 가격 비교
+        sorted_annots = sorted(list(annot_indices))
+        prev_p = None
         
-        # 3. 선별된 포인트(일일 상승 전 최저가)에만 '점(Dot)', '라벨', '시간' 부착
-        for i in annot_indices:
-            txt = e_prices[i]
-            dt_obj = e_dates[i]
+        for idx in sorted_annots:
+            txt = e_prices[idx]
+            dt_obj = e_dates[idx]
             time_str = dt_obj.strftime('%H:%M')
             
-            # 점(Marker)
-            plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
-                     markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.0)
+            # 이전 저점보다 떨어졌다면 하락폭(▼) 문자열 생성
+            drop_str = ""
+            if prev_p is not None and txt < prev_p:
+                drop_val = prev_p - txt
+                drop_str = f" ▼{drop_val:,.0f}k"
+                
+            prev_p = txt # 다음 비교를 위해 현재 가격 저장
             
-            # 다른 아이템과 세로로 겹치지 않도록 방지하는 순위 계산
+            # 다크 모드용 점(Marker)
+            plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
+                     markersize=5.0, markerfacecolor=bg_color, markeredgewidth=1.5)
+            
+            # 세로 겹침 방지 순위 계산
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
@@ -148,7 +163,6 @@ def draw_graph(full_history):
                             elif other_price == txt and nm > item_name:
                                 higher_count += 1
                             
-            # 위치에 따라 가격 말풍선과 시간 텍스트 좌표 상/중/하 분리
             if higher_count == 0:
                 xy_offset_price = (0, 16)
                 xy_offset_time = (0, 6)
@@ -159,62 +173,65 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선 (45도 기울임 유지)
+            # 가격 말풍선
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props, rotation=45)
+            # 다크 모드용 그림자
             ann.get_bbox_patch().set_path_effects([
-                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.05),
+                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#000000', alpha=0.4),
                 pe.Normal()
             ])
             
-            # 시간 텍스트 (45도 기울임 유지)
-            time_ann = plt.annotate(time_str, (dt_obj, txt), 
+            # 💡 [하락폭 적용] 시간 + 하락폭 텍스트 합체
+            time_display = f"{time_str}{drop_str}"
+            time_color = '#38bdf8' if drop_str else text_sub # 하락 시 스카이블루(시안) 색상 적용
+            
+            time_ann = plt.annotate(time_display, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
-                         ha='center', fontsize=6.5, fontweight='600', color='#64748b', alpha=0.9, rotation=45)
+                         ha='center', fontsize=6.5, fontweight='700', color=time_color, alpha=1.0, rotation=45)
+            
+            # 다크 모드 배경색(bg_color)으로 테두리를 둘러서 글씨 보호
             time_ann.set_path_effects([
-                pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.85)
+                pe.withStroke(linewidth=1.5, foreground=bg_color, alpha=0.9)
             ])
     
     y_max = max(all_prices) if all_prices else 150
     top_limit = max(y_max * 1.05, 155)
-    
-    # 하단 범위 조정 (120을 120,000원으로 간주)
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
-    # 역대 최저가 연한 회색 점선
-    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
+    # 💡 [DARK MODE] 역대 최저가 / 목표가 라인 색상 조정
+    plt.axhline(y=all_time_min, color='#475569', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
-            color='#94a3b8', fontweight='bold', fontsize=9, 
+            color='#64748b', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    # 목표가 진한 회색 실선
     target_price = 150
-    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
+    plt.axhline(y=target_price, color='#64748b', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
-            color='#475569', fontweight='bold', fontsize=10, 
+            color='#94a3b8', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('All Observations & Daily Lowest Pre-Rise Points', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
-    plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
+    plt.title('All Observations & Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
+    plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color=text_sub)
     
-    # Y축 점선 그리드와 X축 정각(00:00) 기준 얇은 흰색 세로선
-    ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
-    ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
+    # 다크 모드용 어두운 그리드 라인
+    ax.grid(axis='y', linestyle='--', color=grid_color, linewidth=1.0)
+    ax.grid(axis='x', linestyle='-', color=grid_color, linewidth=1.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
-    # X축 눈금 간격 1일 고정
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
     plt.gcf().autofmt_xdate(rotation=45) 
     
-    ax.tick_params(colors='#64748b', labelsize=9)
+    ax.tick_params(colors=text_sub, labelsize=9)
     
-    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
-               fontsize=9, labelcolor='#334155', borderpad=0.8)
+    # 다크 모드용 범례 테마
+    plt.legend(loc='lower right', frameon=True, facecolor='#1e293b', edgecolor=spine_color, 
+               fontsize=9, labelcolor=text_main, borderpad=0.8)
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
