@@ -2,6 +2,7 @@ import os
 import re
 import json
 import requests
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
@@ -12,6 +13,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+# 💡 머신러닝 예측을 위한 scikit-learn 라이브러리 호출
+from sklearn.linear_model import LinearRegression
 
 # 모니터링할 3개의 아이템 이름과 다나와 주소 정의
 ITEMS_INFO = {
@@ -30,13 +34,13 @@ def draw_graph(full_history):
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
-    # 💡 [DARK MODE] 다크 모드 색상 팔레트 정의
-    bg_color = '#0f172a'       # 깊은 네이비 (배경)
+    # 다크 모드 색상 팔레트 정의
+    bg_color = '#0f172a'
     ax_bg_color = '#0f172a'
-    text_main = '#f8fafc'      # 밝은 화이트 (제목 등 메인 텍스트)
-    text_sub = '#94a3b8'       # 슬레이트 그레이 (축, 라벨 등 서브 텍스트)
-    grid_color = '#1e293b'     # 어두운 그리드 라인
-    spine_color = '#334155'    # 축 테두리
+    text_main = '#f8fafc'
+    text_sub = '#94a3b8'
+    grid_color = '#1e293b'
+    spine_color = '#334155'
     
     ax.set_facecolor(ax_bg_color)
     plt.gcf().patch.set_facecolor(bg_color)
@@ -54,7 +58,6 @@ def draw_graph(full_history):
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    # 💡 [DARK MODE] 어둠 속에서 빛나는 네온 톤으로 색상 변경
     colors = {"daypack": "#60a5fa", "allday": "#fb923c", "daynhalf": "#34d399"}
     
     exact_stats = {name: [] for name in colors.keys()}
@@ -100,11 +103,36 @@ def draw_graph(full_history):
         # 가짜(Dummy) 선 그리기 (범례용)
         plt.plot([], [], marker='o', color=line_color, linewidth=1.5, 
                  markersize=4.5, markerfacecolor=bg_color, markeredgewidth=1.5, label=item_name.upper())
-                 
+        
         # 메인 실선 그리기
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
-        
-        # 💡 [DARK MODE] 말풍선 스타일 다크 테마 적용
+
+        # 🤖 [핵심] 머신러닝 예측선 (Linear Regression) 
+        if len(e_dates) >= 3: # 학습을 위한 최소 데이터 개수 확보
+            # 1. Feature(시간)와 Target(가격) 분리 및 변환
+            X_train = mdates.date2num(e_dates).reshape(-1, 1)
+            y_train = np.array(e_prices)
+            
+            # 2. scikit-learn 선형 회귀 모델 생성 및 학습
+            model = LinearRegression()
+            model.fit(X_train, y_train)
+            
+            # 3. 마지막 관측일 기준 향후 3일간의 시간축 생성 및 예측
+            last_date_num = X_train[-1][0]
+            X_pred = np.linspace(last_date_num, last_date_num + 3, 50).reshape(-1, 1)
+            y_pred = model.predict(X_pred)
+            dates_pred = mdates.num2date(X_pred.flatten())
+            
+            # 4. 실선과 이어지도록 마지막 관측점을 포함하여 점선 그리기
+            plot_dates = [e_dates[-1]] + list(dates_pred)
+            plot_prices = [e_prices[-1]] + list(y_pred)
+            
+            plt.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
+            
+            # 예측선 끝부분에 작게 'Predicted' 라벨 달기
+            plt.text(plot_dates[-1], plot_prices[-1], ' Pred', color=line_color, fontsize=6, fontweight='bold', alpha=0.7)
+
+        # 말풍선 스타일 다크 테마 적용
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#1e293b", ec="none", lw=0, alpha=0.85)
         
         # 1차 필터링: '가격 상승 직전(저점)' 포인트 및 '마지막' 관측치 선별
@@ -129,7 +157,7 @@ def draw_graph(full_history):
             best_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.add(best_idx)
             
-        # 💡 [하락폭 계산] 시간순 정렬 후 이전 마커와 가격 비교
+        # 하락폭 계산 로직
         sorted_annots = sorted(list(annot_indices))
         prev_p = None
         
@@ -144,7 +172,7 @@ def draw_graph(full_history):
                 drop_val = prev_p - txt
                 drop_str = f" ▼{drop_val:,.0f}k"
                 
-            prev_p = txt # 다음 비교를 위해 현재 가격 저장
+            prev_p = txt
             
             # 다크 모드용 점(Marker)
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
@@ -184,9 +212,9 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            # 💡 [하락폭 적용] 시간 + 하락폭 텍스트 합체
+            # 시간 + 하락폭 텍스트 합체
             time_display = f"{time_str}{drop_str}"
-            time_color = '#38bdf8' if drop_str else text_sub # 하락 시 스카이블루(시안) 색상 적용
+            time_color = '#38bdf8' if drop_str else text_sub 
             
             time_ann = plt.annotate(time_display, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
@@ -202,7 +230,7 @@ def draw_graph(full_history):
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
-    # 💡 [DARK MODE] 역대 최저가 / 목표가 라인 색상 조정
+    # 역대 최저가 / 목표가 라인 색상 조정
     plt.axhline(y=all_time_min, color='#475569', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
             color='#64748b', fontweight='bold', fontsize=9, 
@@ -214,7 +242,7 @@ def draw_graph(full_history):
             color='#94a3b8', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('All Observations & Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
+    plt.title('ML Predicted Trend & Daily Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color=text_sub)
     
     # 다크 모드용 어두운 그리드 라인
