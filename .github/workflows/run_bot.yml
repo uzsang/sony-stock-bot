@@ -22,9 +22,9 @@ jobs:
         python-version: '3.9'
 
     - name: Install dependencies
-      # 💡 그래프 생성을 위한 matplotlib 라이브러리가 추가되었습니다.
+      # 💡 머신러닝 예측을 위한 scikit-learn과 numpy 라이브러리가 추가되었습니다.
       run: |
-        pip install selenium requests matplotlib
+        pip install selenium requests matplotlib scikit-learn numpy
 
     - name: Check Stock
       env:
