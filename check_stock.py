@@ -14,7 +14,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# 💡 머신러닝 예측을 위한 scikit-learn 라이브러리 호출
 from sklearn.linear_model import LinearRegression
 
 # 모니터링할 3개의 아이템 이름과 다나와 주소 정의
@@ -107,30 +106,40 @@ def draw_graph(full_history):
         # 메인 실선 그리기
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
 
-        # 🤖 [핵심] 머신러닝 예측선 (Linear Regression) 
-        if len(e_dates) >= 3: # 학습을 위한 최소 데이터 개수 확보
-            # 1. Feature(시간)와 Target(가격) 분리 및 변환
-            X_train = mdates.date2num(e_dates).reshape(-1, 1)
+        # 🤖 [핵심 변경] 머신러닝 예측선 (시간 + 요일 학습)
+        if len(e_dates) >= 3:
+            # 1. Feature(시간 숫자값, 요일 0~6) 와 Target(가격) 분리
+            X_time = mdates.date2num(e_dates).reshape(-1, 1)
+            X_weekday = np.array([dt.weekday() for dt in e_dates]).reshape(-1, 1)
+            X_train = np.hstack((X_time, X_weekday)) # 시간과 요일을 합쳐서 2개의 특징(Feature) 사용
             y_train = np.array(e_prices)
             
-            # 2. scikit-learn 선형 회귀 모델 생성 및 학습
+            # 2. scikit-learn 선형 회귀 모델 학습
             model = LinearRegression()
             model.fit(X_train, y_train)
             
-            # 3. 마지막 관측일 기준 향후 3일간의 시간축 생성 및 예측
-            last_date_num = X_train[-1][0]
-            X_pred = np.linspace(last_date_num, last_date_num + 3, 50).reshape(-1, 1)
+            # 💡 [정확도 계산] R-squared 값을 통해 학습 정확도를 %로 계산
+            r2_score = model.score(X_train, y_train)
+            accuracy_pct = max(0.0, r2_score * 100) # 신뢰도가 마이너스로 떨어지는 것을 방지
+            
+            # 3. 마지막 관측일 기준 향후 3일(내일, 모레, 글피) 생성
+            future_dates = [e_dates[-1] + timedelta(days=i) for i in range(1, 4)]
+            X_pred_time = mdates.date2num(future_dates).reshape(-1, 1)
+            X_pred_weekday = np.array([dt.weekday() for dt in future_dates]).reshape(-1, 1)
+            X_pred = np.hstack((X_pred_time, X_pred_weekday))
+            
+            # 가격 예측
             y_pred = model.predict(X_pred)
-            dates_pred = mdates.num2date(X_pred.flatten())
             
             # 4. 실선과 이어지도록 마지막 관측점을 포함하여 점선 그리기
-            plot_dates = [e_dates[-1]] + list(dates_pred)
+            plot_dates = [e_dates[-1]] + future_dates
             plot_prices = [e_prices[-1]] + list(y_pred)
             
             plt.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
             
-            # 예측선 끝부분에 작게 'Predicted' 라벨 달기
-            plt.text(plot_dates[-1], plot_prices[-1], ' Pred', color=line_color, fontsize=6, fontweight='bold', alpha=0.7)
+            # 💡 [정확도 표시] 예측선 끝부분에 라벨과 정확도 % 부착
+            plt.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
+                     color=line_color, fontsize=6, fontweight='bold', alpha=0.9)
 
         # 말풍선 스타일 다크 테마 적용
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#1e293b", ec="none", lw=0, alpha=0.85)
