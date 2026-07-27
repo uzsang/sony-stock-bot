@@ -33,13 +33,12 @@ def draw_graph(full_history):
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
-    # 다크 모드 색상 팔레트 정의
-    bg_color = '#0f172a'
-    ax_bg_color = '#0f172a'
-    text_main = '#f8fafc'
-    text_sub = '#94a3b8'
-    grid_color = '#1e293b'
-    spine_color = '#334155'
+    # 💡 화이트 테마 색상 팔레트 복구
+    bg_color = '#ffffff'
+    ax_bg_color = '#f8f9fa'
+    text_main = '#1e293b'
+    text_sub = '#64748b'
+    spine_color = '#e2e8f0'
     
     ax.set_facecolor(ax_bg_color)
     plt.gcf().patch.set_facecolor(bg_color)
@@ -57,7 +56,8 @@ def draw_graph(full_history):
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    colors = {"daypack": "#60a5fa", "allday": "#fb923c", "daynhalf": "#34d399"}
+    # 💡 밝은 배경에 어울리는 선명한 색상으로 복구
+    colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
     
     exact_stats = {name: [] for name in colors.keys()}
     daily_stats = {name: {} for name in colors.keys()}
@@ -97,54 +97,45 @@ def draw_graph(full_history):
             maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
             d_dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
             
-            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.1, edgecolor='none')
+            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
             
         # 가짜(Dummy) 선 그리기 (범례용)
         plt.plot([], [], marker='o', color=line_color, linewidth=1.5, 
-                 markersize=4.5, markerfacecolor=bg_color, markeredgewidth=1.5, label=item_name.upper())
+                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
         
         # 메인 실선 그리기
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
 
-        # 🤖 [핵심 변경] 머신러닝 예측선 (시간 + 요일 학습)
+        # 🤖 전체 기간 머신러닝 예측선 (시간 + 요일 학습)
         if len(e_dates) >= 3:
-            # 1. Feature(시간 숫자값, 요일 0~6) 와 Target(가격) 분리
             X_time = mdates.date2num(e_dates).reshape(-1, 1)
             X_weekday = np.array([dt.weekday() for dt in e_dates]).reshape(-1, 1)
-            X_train = np.hstack((X_time, X_weekday)) # 시간과 요일을 합쳐서 2개의 특징(Feature) 사용
+            X_train = np.hstack((X_time, X_weekday)) 
             y_train = np.array(e_prices)
             
-            # 2. scikit-learn 선형 회귀 모델 학습
             model = LinearRegression()
             model.fit(X_train, y_train)
             
-            # 💡 [정확도 계산] R-squared 값을 통해 학습 정확도를 %로 계산
             r2_score = model.score(X_train, y_train)
-            accuracy_pct = max(0.0, r2_score * 100) # 신뢰도가 마이너스로 떨어지는 것을 방지
+            accuracy_pct = max(0.0, r2_score * 100)
             
-            # 3. 마지막 관측일 기준 향후 3일(내일, 모레, 글피) 생성
             future_dates = [e_dates[-1] + timedelta(days=i) for i in range(1, 4)]
-            X_pred_time = mdates.date2num(future_dates).reshape(-1, 1)
-            X_pred_weekday = np.array([dt.weekday() for dt in future_dates]).reshape(-1, 1)
-            X_pred = np.hstack((X_pred_time, X_pred_weekday))
+            all_dates = e_dates + future_dates
             
-            # 가격 예측
-            y_pred = model.predict(X_pred)
+            X_all_time = mdates.date2num(all_dates).reshape(-1, 1)
+            X_all_weekday = np.array([dt.weekday() for dt in all_dates]).reshape(-1, 1)
+            X_all = np.hstack((X_all_time, X_all_weekday))
             
-            # 4. 실선과 이어지도록 마지막 관측점을 포함하여 점선 그리기
-            plot_dates = [e_dates[-1]] + future_dates
-            plot_prices = [e_prices[-1]] + list(y_pred)
+            y_all_pred = model.predict(X_all)
             
-            plt.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
+            plt.plot(all_dates, y_all_pred, color=line_color, linestyle=':', linewidth=1.5, alpha=0.5)
             
-            # 💡 [정확도 표시] 예측선 끝부분에 라벨과 정확도 % 부착
-            plt.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
+            plt.text(all_dates[-1], y_all_pred[-1], f' Pred ({accuracy_pct:.1f}%)', 
                      color=line_color, fontsize=6, fontweight='bold', alpha=0.9)
 
-        # 말풍선 스타일 다크 테마 적용
-        bbox_props = dict(boxstyle="round,pad=0.2", fc="#1e293b", ec="none", lw=0, alpha=0.85)
+        # 💡 화이트 테마 말풍선 스타일
+        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.85)
         
-        # 1차 필터링: '가격 상승 직전(저점)' 포인트 및 '마지막' 관측치 선별
         candidate_indices = set()
         for i in range(len(e_prices) - 1):
             if e_prices[i] < e_prices[i+1]:
@@ -152,7 +143,6 @@ def draw_graph(full_history):
         if e_prices:
             candidate_indices.add(len(e_prices) - 1)
             
-        # 2차 필터링: 같은 날짜에 여러 후보가 있다면 '최저가' 딱 하나만 남김
         day_to_candidates = {}
         for idx in candidate_indices:
             d_str = e_dates[idx].strftime('%Y-%m-%d')
@@ -166,7 +156,6 @@ def draw_graph(full_history):
             best_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.add(best_idx)
             
-        # 하락폭 계산 로직
         sorted_annots = sorted(list(annot_indices))
         prev_p = None
         
@@ -175,7 +164,6 @@ def draw_graph(full_history):
             dt_obj = e_dates[idx]
             time_str = dt_obj.strftime('%H:%M')
             
-            # 이전 저점보다 떨어졌다면 하락폭(▼) 문자열 생성
             drop_str = ""
             if prev_p is not None and txt < prev_p:
                 drop_val = prev_p - txt
@@ -183,11 +171,9 @@ def draw_graph(full_history):
                 
             prev_p = txt
             
-            # 다크 모드용 점(Marker)
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
-                     markersize=5.0, markerfacecolor=bg_color, markeredgewidth=1.5)
+                     markersize=5.0, markerfacecolor='#ffffff', markeredgewidth=1.5)
             
-            # 세로 겹침 방지 순위 계산
             higher_count = 0
             for nm in colors.keys():
                 if nm != item_name and exact_stats[nm]:
@@ -210,28 +196,28 @@ def draw_graph(full_history):
                 xy_offset_price = (0, -36)
                 xy_offset_time = (0, -45)
 
-            # 가격 말풍선
             ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_price, 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props, rotation=45)
-            # 다크 모드용 그림자
+            
+            # 밝은 테마용 그림자
             ann.get_bbox_patch().set_path_effects([
-                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#000000', alpha=0.4),
+                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.08),
                 pe.Normal()
             ])
             
-            # 시간 + 하락폭 텍스트 합체
             time_display = f"{time_str}{drop_str}"
-            time_color = '#38bdf8' if drop_str else text_sub 
+            # 💡 밝은 테마에서는 파란색 계열이 하락폭을 더 또렷하게 보여줍니다.
+            time_color = '#0284c7' if drop_str else text_sub 
             
             time_ann = plt.annotate(time_display, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
                          ha='center', fontsize=6.5, fontweight='700', color=time_color, alpha=1.0, rotation=45)
             
-            # 다크 모드 배경색(bg_color)으로 테두리를 둘러서 글씨 보호
+            # 흰색 외곽선 적용
             time_ann.set_path_effects([
-                pe.withStroke(linewidth=1.5, foreground=bg_color, alpha=0.9)
+                pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.9)
             ])
     
     y_max = max(all_prices) if all_prices else 150
@@ -239,24 +225,24 @@ def draw_graph(full_history):
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
-    # 역대 최저가 / 목표가 라인 색상 조정
-    plt.axhline(y=all_time_min, color='#475569', linestyle=':', linewidth=1.5, alpha=0.8)
+    # 💡 밝은 테마용 기준선 색상 복구
+    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
-            color='#64748b', fontweight='bold', fontsize=9, 
+            color='#94a3b8', fontweight='bold', fontsize=9, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     target_price = 150
-    plt.axhline(y=target_price, color='#64748b', linestyle='-', linewidth=1.5, alpha=0.8)
+    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
     ax.text(0.02, target_price + 1.0, 'Target (150k)', 
-            color='#94a3b8', fontweight='bold', fontsize=10, 
+            color='#475569', fontweight='bold', fontsize=10, 
             va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
     plt.title('ML Predicted Trend & Daily Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color=text_sub)
     
-    # 다크 모드용 어두운 그리드 라인
-    ax.grid(axis='y', linestyle='--', color=grid_color, linewidth=1.0)
-    ax.grid(axis='x', linestyle='-', color=grid_color, linewidth=1.0)
+    # 💡 밝은 테마용 그리드 라인 복구
+    ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
+    ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
     
@@ -266,9 +252,9 @@ def draw_graph(full_history):
     
     ax.tick_params(colors=text_sub, labelsize=9)
     
-    # 다크 모드용 범례 테마
-    plt.legend(loc='lower right', frameon=True, facecolor='#1e293b', edgecolor=spine_color, 
-               fontsize=9, labelcolor=text_main, borderpad=0.8)
+    # 밝은 테마 범례 복구
+    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
+               fontsize=9, labelcolor='#334155', borderpad=0.8)
     
     graph_path = 'price_graph.png'
     plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
