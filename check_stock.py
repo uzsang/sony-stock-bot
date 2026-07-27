@@ -33,7 +33,7 @@ def draw_graph(full_history):
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     
-    # 💡 화이트 테마 색상 팔레트 복구
+    # 💡 화이트 테마 색상 팔레트
     bg_color = '#ffffff'
     ax_bg_color = '#f8f9fa'
     text_main = '#1e293b'
@@ -56,7 +56,7 @@ def draw_graph(full_history):
     target_days_ago = now_kst - timedelta(days=21)
     history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    # 💡 밝은 배경에 어울리는 선명한 색상으로 복구
+    # 밝은 배경에 어울리는 선명한 색상
     colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
     
     exact_stats = {name: [] for name in colors.keys()}
@@ -106,7 +106,7 @@ def draw_graph(full_history):
         # 메인 실선 그리기
         plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
 
-        # 🤖 전체 기간 머신러닝 예측선 (시간 + 요일 학습)
+        # 🤖 [복구] 머신러닝 예측선 (꼬리 부분만 표시)
         if len(e_dates) >= 3:
             X_time = mdates.date2num(e_dates).reshape(-1, 1)
             X_weekday = np.array([dt.weekday() for dt in e_dates]).reshape(-1, 1)
@@ -119,21 +119,24 @@ def draw_graph(full_history):
             r2_score = model.score(X_train, y_train)
             accuracy_pct = max(0.0, r2_score * 100)
             
+            # 미래 3일치 데이터만 생성하여 예측
             future_dates = [e_dates[-1] + timedelta(days=i) for i in range(1, 4)]
-            all_dates = e_dates + future_dates
+            X_pred_time = mdates.date2num(future_dates).reshape(-1, 1)
+            X_pred_weekday = np.array([dt.weekday() for dt in future_dates]).reshape(-1, 1)
+            X_pred = np.hstack((X_pred_time, X_pred_weekday))
             
-            X_all_time = mdates.date2num(all_dates).reshape(-1, 1)
-            X_all_weekday = np.array([dt.weekday() for dt in all_dates]).reshape(-1, 1)
-            X_all = np.hstack((X_all_time, X_all_weekday))
+            y_pred = model.predict(X_pred)
             
-            y_all_pred = model.predict(X_all)
+            # 마지막 관측점에서 미래 예측선으로 이어 그리기
+            plot_dates = [e_dates[-1]] + future_dates
+            plot_prices = [e_prices[-1]] + list(y_pred)
             
-            plt.plot(all_dates, y_all_pred, color=line_color, linestyle=':', linewidth=1.5, alpha=0.5)
+            plt.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
             
-            plt.text(all_dates[-1], y_all_pred[-1], f' Pred ({accuracy_pct:.1f}%)', 
+            plt.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
                      color=line_color, fontsize=6, fontweight='bold', alpha=0.9)
 
-        # 💡 화이트 테마 말풍선 스타일
+        # 화이트 테마 말풍선 스타일
         bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.85)
         
         candidate_indices = set()
@@ -157,19 +160,11 @@ def draw_graph(full_history):
             annot_indices.add(best_idx)
             
         sorted_annots = sorted(list(annot_indices))
-        prev_p = None
         
         for idx in sorted_annots:
             txt = e_prices[idx]
             dt_obj = e_dates[idx]
             time_str = dt_obj.strftime('%H:%M')
-            
-            drop_str = ""
-            if prev_p is not None and txt < prev_p:
-                drop_val = prev_p - txt
-                drop_str = f" ▼{drop_val:,.0f}k"
-                
-            prev_p = txt
             
             plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=5.0, markerfacecolor='#ffffff', markeredgewidth=1.5)
@@ -207,13 +202,10 @@ def draw_graph(full_history):
                 pe.Normal()
             ])
             
-            time_display = f"{time_str}{drop_str}"
-            # 💡 밝은 테마에서는 파란색 계열이 하락폭을 더 또렷하게 보여줍니다.
-            time_color = '#0284c7' if drop_str else text_sub 
-            
-            time_ann = plt.annotate(time_display, (dt_obj, txt), 
+            # 💡 [복구] 하락폭 텍스트 제거 및 깔끔한 시간만 표시
+            time_ann = plt.annotate(time_str, (dt_obj, txt), 
                          textcoords="offset points", xytext=xy_offset_time, 
-                         ha='center', fontsize=6.5, fontweight='700', color=time_color, alpha=1.0, rotation=45)
+                         ha='center', fontsize=6.5, fontweight='700', color=text_sub, alpha=1.0, rotation=45)
             
             # 흰색 외곽선 적용
             time_ann.set_path_effects([
@@ -225,7 +217,7 @@ def draw_graph(full_history):
     bottom_limit = min(120, all_time_min - 2)
     plt.ylim(bottom_limit, top_limit)
     
-    # 💡 밝은 테마용 기준선 색상 복구
+    # 밝은 테마용 기준선 색상
     plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
             color='#94a3b8', fontweight='bold', fontsize=9, 
@@ -240,7 +232,7 @@ def draw_graph(full_history):
     plt.title('ML Predicted Trend & Daily Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
     plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color=text_sub)
     
-    # 💡 밝은 테마용 그리드 라인 복구
+    # 밝은 테마용 그리드 라인
     ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
     
@@ -252,7 +244,7 @@ def draw_graph(full_history):
     
     ax.tick_params(colors=text_sub, labelsize=9)
     
-    # 밝은 테마 범례 복구
+    # 밝은 테마 범례
     plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
