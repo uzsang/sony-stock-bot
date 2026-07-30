@@ -8,69 +8,110 @@ import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
 import matplotlib.patheffects as pe
 from datetime import datetime, timedelta
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
 from sklearn.linear_model import LinearRegression
 
-# 모니터링할 3개의 아이템 이름과 다나와 주소 정의
+# ==========================================
+# 1. 설정 및 상수 (Configuration)
+# ==========================================
 ITEMS_INFO = {
-    "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=1832384&defaultPhysicsCategoryCode=1824%7C228109%7C228787%7C0&defaultVmTab=1&defaultVaTab=107&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
-    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N&coupangMemberSort=N&simpleDescOpen=Y&isInitTireSmartFinder=N&recommendedSort=N&defaultUICategoryCode=13227919&defaultPhysicsCategoryCode=1825%7C9535%7C224740%7C0&defaultVmTab=2&defaultVaTab=66&isZeroPrice=Y&quickProductYN=N&priceUnitSort=N&priceUnitSortOrder=A",
+    "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
+    "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
     "daynhalf": "https://search.danawa.com/dsearch.php?query=09J29453&originalQuery=09J29453&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N"
 }
 
+ITEM_COLORS = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
+HISTORY_FILE = 'price_history.json'
+GRAPH_FILE = 'price_graph.png'
+TARGET_PRICE = 150
+
+# ==========================================
+# 2. 데이터 처리 및 유틸리티 (Data & Utils)
+# ==========================================
+def load_history(filepath):
+    """JSON 파일에서 과거 데이터를 불러옵니다."""
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
+def save_history(filepath, history_data):
+    """업데이트된 데이터를 JSON 파일에 저장합니다."""
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(history_data, f, ensure_ascii=False, indent=2)
+
+def extract_buy_url(price_element, default_url):
+    """가격 요소에서 가장 안전한 구매 링크를 추출합니다."""
+    try:
+        li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
+        link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
+        url = link_el.get_attribute("href")
+        if url and "javascript" not in url:
+            return url
+    except Exception:
+        pass
+    
+    try:
+        return price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
+    except Exception:
+        return default_url
+
+# ==========================================
+# 3. 그래프 생성 (Matplotlib & ML)
+# ==========================================
 def draw_graph(full_history):
     if not full_history:
         return None
         
+    # 기본 폰트 및 테마 설정
     plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'Liberation Sans', 'sans-serif']
-        
-    plt.figure(figsize=(10, 6))
-    ax = plt.gca()
+    plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif']
     
-    # 💡 화이트 테마 색상 팔레트
-    bg_color = '#ffffff'
-    ax_bg_color = '#f8f9fa'
-    text_main = '#1e293b'
-    text_sub = '#64748b'
-    spine_color = '#e2e8f0'
-    
-    ax.set_facecolor(ax_bg_color)
-    plt.gcf().patch.set_facecolor(bg_color)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.set_facecolor('#f8f9fa')
+    fig.patch.set_facecolor('#ffffff')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color(spine_color)
-    ax.spines['bottom'].set_color(spine_color)
+    ax.spines['left'].set_color('#e2e8f0')
+    ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 역대 최저가 및 날짜 추출
-    all_time_min_item = min(full_history, key=lambda x: x['price'])
+    # 1) 데이터 파싱 및 21일치 필터링
+    parsed_history = []
+    for item in full_history:
+        item_copy = item.copy()
+        item_copy['dt_obj'] = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
+        parsed_history.append(item_copy)
+        
+    # 역대 최저가 추출
+    all_time_min_item = min(parsed_history, key=lambda x: x['price'])
     all_time_min = all_time_min_item['price'] / 1000.0
     all_time_min_date = all_time_min_item['timestamp'][:10]
     
     now_kst = datetime.utcnow() + timedelta(hours=9)
     target_days_ago = now_kst - timedelta(days=21)
-    history = [item for item in full_history if datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
     
-    # 밝은 배경에 어울리는 선명한 색상
-    colors = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
+    recent_history = [item for item in parsed_history if item['dt_obj'] > target_days_ago]
     
-    exact_stats = {name: [] for name in colors.keys()}
-    daily_stats = {name: {} for name in colors.keys()}
+    # 2) 아이템별 데이터 그룹화
+    exact_stats = {name: [] for name in ITEM_COLORS.keys()}
+    daily_stats = {name: {} for name in ITEM_COLORS.keys()}
     
-    for item in history:
+    for item in recent_history:
         name = item.get('item', 'daypack')
-        if name not in colors:
-            continue
-        dt_str = item['timestamp']
-        date_str = dt_str[:10]
-        price = item['price'] / 1000.0
+        if name not in ITEM_COLORS: continue
         
-        dt_obj = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+        price = item['price'] / 1000.0
+        dt_obj = item['dt_obj']
+        date_str = dt_obj.strftime('%Y-%m-%d')
+        
         exact_stats[name].append((dt_obj, price))
         
         if date_str not in daily_stats[name]:
@@ -80,33 +121,31 @@ def draw_graph(full_history):
             daily_stats[name][date_str]['max'] = max(daily_stats[name][date_str]['max'], price)
 
     all_prices = []
+    bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.85)
     
-    for item_name, line_color in colors.items():
-        if not exact_stats[item_name]:
-            continue
+    # 3) 아이템별 그래프 그리기
+    for item_name, line_color in ITEM_COLORS.items():
+        if not exact_stats[item_name]: continue
             
         exact_stats[item_name].sort(key=lambda x: x[0])
         e_dates = [x[0] for x in exact_stats[item_name]]
         e_prices = [x[1] for x in exact_stats[item_name]]
         all_prices.extend(e_prices)
         
-        # 최저-최고 범위 대역
+        # 음영 범위(밴드)
         if daily_stats[item_name]:
             sorted_dates = sorted(daily_stats[item_name].keys())
             mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
             maxs = [daily_stats[item_name][d]['max'] for d in sorted_dates]
             d_dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
+            ax.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
             
-            plt.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
-            
-        # 가짜(Dummy) 선 그리기 (범례용)
-        plt.plot([], [], marker='o', color=line_color, linewidth=1.5, 
-                 markersize=4.5, markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
-        
-        # 메인 실선 그리기
-        plt.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
+        # 더미 선 (범례용) 및 메인 실선
+        ax.plot([], [], marker='o', color=line_color, linewidth=1.5, markersize=4.5, 
+                markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
+        ax.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
 
-        # 🤖 [복구] 머신러닝 예측선 (꼬리 부분만 표시)
+        # 머신러닝 예측선 (꼬리 부분)
         if len(e_dates) >= 3:
             X_time = mdates.date2num(e_dates).reshape(-1, 1)
             X_weekday = np.array([dt.weekday() for dt in e_dates]).reshape(-1, 1)
@@ -116,309 +155,225 @@ def draw_graph(full_history):
             model = LinearRegression()
             model.fit(X_train, y_train)
             
-            r2_score = model.score(X_train, y_train)
-            accuracy_pct = max(0.0, r2_score * 100)
+            accuracy_pct = max(0.0, model.score(X_train, y_train) * 100)
             
-            # 미래 3일치 데이터만 생성하여 예측
             future_dates = [e_dates[-1] + timedelta(days=i) for i in range(1, 4)]
             X_pred_time = mdates.date2num(future_dates).reshape(-1, 1)
             X_pred_weekday = np.array([dt.weekday() for dt in future_dates]).reshape(-1, 1)
-            X_pred = np.hstack((X_pred_time, X_pred_weekday))
             
-            y_pred = model.predict(X_pred)
+            y_pred = model.predict(np.hstack((X_pred_time, X_pred_weekday)))
             
-            # 마지막 관측점에서 미래 예측선으로 이어 그리기
             plot_dates = [e_dates[-1]] + future_dates
             plot_prices = [e_prices[-1]] + list(y_pred)
             
-            plt.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
-            
-            plt.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
+            ax.plot(plot_dates, plot_prices, color=line_color, linestyle=':', linewidth=1.5, alpha=0.7)
+            ax.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
                      color=line_color, fontsize=6, fontweight='bold', alpha=0.9)
 
-        # 화이트 테마 말풍선 스타일
-        bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.85)
-        
-        candidate_indices = set()
-        for i in range(len(e_prices) - 1):
-            if e_prices[i] < e_prices[i+1]:
-                candidate_indices.add(i)
-        if e_prices:
-            candidate_indices.add(len(e_prices) - 1)
+        # 상승 직전 저점 필터링 로직
+        candidate_indices = [i for i in range(len(e_prices) - 1) if e_prices[i] < e_prices[i+1]]
+        if e_prices: candidate_indices.append(len(e_prices) - 1)
             
         day_to_candidates = {}
         for idx in candidate_indices:
-            d_str = e_dates[idx].strftime('%Y-%m-%d')
-            if d_str not in day_to_candidates:
-                day_to_candidates[d_str] = []
-            day_to_candidates[d_str].append(idx)
+            day_to_candidates.setdefault(e_dates[idx].strftime('%Y-%m-%d'), []).append(idx)
             
-        annot_indices = set()
-        for d_str, indices in day_to_candidates.items():
+        annot_indices = []
+        for indices in day_to_candidates.values():
             min_p = min(e_prices[i] for i in indices)
             best_idx = [i for i in indices if e_prices[i] == min_p][-1]
-            annot_indices.add(best_idx)
+            annot_indices.append(best_idx)
             
-        sorted_annots = sorted(list(annot_indices))
-        
-        for idx in sorted_annots:
+        # 어노테이션(말풍선) 부착
+        for idx in sorted(annot_indices):
             txt = e_prices[idx]
             dt_obj = e_dates[idx]
-            time_str = dt_obj.strftime('%H:%M')
             
-            plt.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
+            ax.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=5.0, markerfacecolor='#ffffff', markeredgewidth=1.5)
             
-            higher_count = 0
-            for nm in colors.keys():
-                if nm != item_name and exact_stats[nm]:
-                    nm_prices_before = [p for d, p in exact_stats[nm] if d <= dt_obj]
-                    if nm_prices_before:
-                        other_price = nm_prices_before[-1]
-                        if abs(other_price - txt) < 15:
-                            if other_price > txt:
-                                higher_count += 1
-                            elif other_price == txt and nm > item_name:
-                                higher_count += 1
-                            
-            if higher_count == 0:
-                xy_offset_price = (0, 16)
-                xy_offset_time = (0, 6)
-            elif higher_count == 1:
-                xy_offset_price = (0, -14)
-                xy_offset_time = (0, -23)
-            else:
-                xy_offset_price = (0, -36)
-                xy_offset_time = (0, -45)
+            # 겹침 방지 (Higher count)
+            higher_count = sum(
+                1 for nm, data in exact_stats.items()
+                if nm != item_name and data
+                for d, p in [data[-1] if data else (None, None)] # 간소화된 추적
+                if [val for d_val, val in data if d_val <= dt_obj] 
+                and abs([val for d_val, val in data if d_val <= dt_obj][-1] - txt) < 15
+                and ([val for d_val, val in data if d_val <= dt_obj][-1] > txt or 
+                    ([val for d_val, val in data if d_val <= dt_obj][-1] == txt and nm > item_name))
+            )
+            
+            xy_offsets = [(0, 16), (0, -14), (0, -36)]
+            time_offsets = [(0, 6), (0, -23), (0, -45)]
+            offset_idx = min(higher_count, 2)
 
-            ann = plt.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
-                         textcoords="offset points", xytext=xy_offset_price, 
+            ann = ax.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
+                         textcoords="offset points", xytext=xy_offsets[offset_idx], 
                          ha='center', fontsize=8, fontweight='700', color=line_color, alpha=0.9,
                          bbox=bbox_props, rotation=45)
-            
-            # 밝은 테마용 그림자
             ann.get_bbox_patch().set_path_effects([
-                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.08),
-                pe.Normal()
+                pe.SimplePatchShadow(offset=(1.0, -1.0), shadow_rgbFace='#0f172a', alpha=0.08), pe.Normal()
             ])
             
-            # 💡 [복구] 하락폭 텍스트 제거 및 깔끔한 시간만 표시
-            time_ann = plt.annotate(time_str, (dt_obj, txt), 
-                         textcoords="offset points", xytext=xy_offset_time, 
-                         ha='center', fontsize=6.5, fontweight='700', color=text_sub, alpha=1.0, rotation=45)
-            
-            # 흰색 외곽선 적용
-            time_ann.set_path_effects([
-                pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.9)
-            ])
+            time_ann = ax.annotate(dt_obj.strftime('%H:%M'), (dt_obj, txt), 
+                         textcoords="offset points", xytext=time_offsets[offset_idx], 
+                         ha='center', fontsize=6.5, fontweight='700', color='#64748b', alpha=1.0, rotation=45)
+            time_ann.set_path_effects([pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.9)])
     
-    y_max = max(all_prices) if all_prices else 150
-    top_limit = max(y_max * 1.05, 155)
-    bottom_limit = min(120, all_time_min - 2)
-    plt.ylim(bottom_limit, top_limit)
+    # 4) 그래프 축 및 레이아웃 정리
+    y_max = max(all_prices) if all_prices else TARGET_PRICE
+    ax.set_ylim(min(120, all_time_min - 2), max(y_max * 1.05, 155))
     
-    # 밝은 테마용 기준선 색상
-    plt.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
-    ax.text(0.02, all_time_min + 0.8, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
-            color='#94a3b8', fontweight='bold', fontsize=9, 
-            va='bottom', ha='left', transform=ax.get_yaxis_transform())
+    # 기준선 (역대 최저가 및 목표가)
+    ax.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
+    ax.text(0.02, all_time_min - 0.5, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
+            color='#94a3b8', fontweight='bold', fontsize=9, va='top', ha='left', transform=ax.get_yaxis_transform())
     
-    target_price = 150
-    plt.axhline(y=target_price, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
-    ax.text(0.02, target_price + 1.0, 'Target (150k)', 
-            color='#475569', fontweight='bold', fontsize=10, 
-            va='bottom', ha='left', transform=ax.get_yaxis_transform())
+    ax.axhline(y=TARGET_PRICE, color='#475569', linestyle='-', linewidth=1.5, alpha=0.8)
+    ax.text(0.02, TARGET_PRICE + 1.0, f'Target ({TARGET_PRICE}k)', 
+            color='#475569', fontweight='bold', fontsize=10, va='bottom', ha='left', transform=ax.get_yaxis_transform())
     
-    plt.title('ML Predicted Trend & Daily Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color=text_main)
-    plt.ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color=text_sub)
+    ax.set_title('ML Predicted Trend & Daily Pre-Rise Lowest Points', fontsize=15, fontweight='bold', pad=20, color='#1e293b')
+    ax.set_ylabel('Price (x1,000 KRW)', fontsize=10, fontweight='500', color='#64748b')
     
-    # 밝은 테마용 그리드 라인
     ax.grid(axis='y', linestyle='--', color='#f1f5f9', linewidth=1.5)
     ax.grid(axis='x', linestyle='-', color='#ffffff', linewidth=1.0)
     
     ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
-    
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-    plt.gcf().autofmt_xdate(rotation=45) 
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
+    fig.autofmt_xdate(rotation=45) 
     
-    ax.tick_params(colors=text_sub, labelsize=9)
-    
-    # 밝은 테마 범례
-    plt.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
+    ax.tick_params(colors='#64748b', labelsize=9)
+    ax.legend(loc='lower right', frameon=True, facecolor='#ffffff', edgecolor='#e2e8f0', 
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
-    graph_path = 'price_graph.png'
-    plt.savefig(graph_path, bbox_inches='tight', dpi=150) 
-    plt.close()
+    plt.savefig(GRAPH_FILE, bbox_inches='tight', dpi=150) 
+    plt.close(fig) # 메모리 누수 방지
     
-    return graph_path
+    return GRAPH_FILE
 
-def get_lowest_price():
+# ==========================================
+# 4. 가격 수집 (Selenium)
+# ==========================================
+def fetch_current_prices(driver):
+    current_results = {}
+    now_kst = datetime.utcnow() + timedelta(hours=9)
+    now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+    wait = WebDriverWait(driver, 10)
+    
+    for item_name, url in ITEMS_INFO.items():
+        try:
+            driver.get(url)
+            price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
+            clean_price = int(re.sub(r'[^0-9]', '', price_element.text))
+            buy_url = extract_buy_url(price_element, url)
+            
+            current_results[item_name] = {
+                'timestamp': now_str,
+                'price': clean_price,
+                'text': price_element.text,
+                'buy_url': buy_url
+            }
+        except Exception as e:
+            print(f"Error fetching {item_name}: {e}")
+            
+    return current_results, now_kst
+
+# ==========================================
+# 5. 메인 로직 및 텔레그램 연동
+# ==========================================
+def build_messages(current_results, history, new_records_triggered, now_kst, graph_file):
+    if new_records_triggered:
+        header = f"💥💣 <b>[3주 최저가 갱신 ({', '.join(new_records_triggered)})!!]</b> 💣💥\n"
+    else:
+        header = ""
+
+    def format_message(title):
+        msg = f"{header}<b>{title}</b>\n\n알림시각 : {now_kst.strftime('%y%m%d %H:%M')}\n상품가격(현재가/3주 최저가)\n"
+        for name in ITEM_COLORS.keys():
+            if name in current_results:
+                curr_p = current_results[name]['price']
+                # 3주 이내 최저가 계산
+                target_days_ago = now_kst - timedelta(days=21)
+                recent = [x['price'] for x in history if x.get('item') == name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
+                low_p = min(recent) if recent else curr_p
+                msg += f"-{name.upper()} : {curr_p:,} / {low_p:,}\n"
+        return msg.strip()
+
+    inline_keyboard = [[{"text": f"🛒 {name.upper()} 최저가 바로가기", "url": res['buy_url']}] 
+                       for name, res in current_results.items()]
+    reply_markup = {"inline_keyboard": inline_keyboard}
+    
+    cron_trigger = os.environ.get('CRON_TRIGGER', '')
+    is_regular_report = (cron_trigger == '0 23 * * *') or (cron_trigger == '')
+    
+    messages = []
+    if is_regular_report:
+        messages.append({"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup})
+    
+    messages.append({"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup})
+    return messages
+
+def send_telegram(results):
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    if not chat_id or not results: return
+        
+    for item in results:
+        token = os.environ.get('TELEGRAM_TOKEN_REGULAR') if item["target"] == "regular" else os.environ.get('TELEGRAM_TOKEN')
+        if not token: continue
+            
+        data = {'chat_id': chat_id, 'caption': item["text"], 'parse_mode': 'HTML'}
+        if item.get("reply_markup"):
+            data['reply_markup'] = json.dumps(item["reply_markup"])
+            
+        graph_file = item.get("graph")
+        if graph_file and os.path.exists(graph_file):
+            with open(graph_file, 'rb') as f:
+                requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data=data, files={'photo': f})
+        else:
+            data['text'] = data.pop('caption')
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
+
+def main():
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
 
     driver = webdriver.Chrome(options=options)
-    
-    history_file = 'price_history.json'
-    if os.path.exists(history_file):
-        with open(history_file, 'r', encoding='utf-8') as f:
-            try: history = json.load(f)
-            except: history = []
-    else:
-        history = []
-
-    now_kst = datetime.utcnow() + timedelta(hours=9)
-    now_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
-    
-    current_results = {}
-    new_records_triggered = []
+    history = load_history(HISTORY_FILE)
     
     try:
-        for item_name, url in ITEMS_INFO.items():
-            driver.get(url)
-            wait = WebDriverWait(driver, 10)
-            
-            price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "p.price_sect strong")))
-            price_text = price_element.text
-            clean_price = int(re.sub(r'[^0-9]', '', price_text))
-            
-            buy_url = url
-            try:
-                li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
-                try:
-                    link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
-                    extracted_url = link_el.get_attribute("href")
-                    if extracted_url and "javascript" not in extracted_url:
-                        buy_url = extracted_url
-                    else:
-                        buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
-                except:
-                    buy_url = price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
-            except:
-                pass
-            
-            item_history = [x for x in history if x.get('item', 'daypack') == item_name]
-            is_new_record = False
-            
-            target_days_ago = now_kst - timedelta(days=21)
-            recent_item_history = [x for x in item_history if datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
-            
-            if recent_item_history:
-                prev_lowest_item = min(recent_item_history, key=lambda x: x['price'])
-                if clean_price < prev_lowest_item['price']:
-                    is_new_record = True
-                    new_records_triggered.append(item_name)
-            
+        current_results, now_kst = fetch_current_prices(driver)
+        
+        target_days_ago = now_kst - timedelta(days=21)
+        new_records_triggered = []
+        
+        for name, data in current_results.items():
+            recent_prices = [x['price'] for x in history if x.get('item') == name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
+            if recent_prices and data['price'] < min(recent_prices):
+                new_records_triggered.append(name)
+                
             history.append({
-                'item': item_name,
-                'timestamp': now_str, 
-                'price': clean_price, 
-                'text': price_text
+                'item': name,
+                'timestamp': data['timestamp'],
+                'price': data['price'],
+                'text': data['text']
             })
             
-            updated_recent = [x for x in history if x.get('item', 'daypack') == item_name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
-            lowest_item = min(updated_recent, key=lambda x: x['price'])
-            
-            current_results[item_name] = {
-                'curr_price': clean_price,
-                'low_price': lowest_item['price'],
-                'buy_url': buy_url
-            }
-            
-        with open(history_file, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-            
+        save_history(HISTORY_FILE, history)
         graph_file = draw_graph(history)
-
-        if new_records_triggered:
-            items_str = ", ".join(new_records_triggered)
-            header = f"💥💣 <b>[3주 최저가 갱신 ({items_str})!!]</b> 💣💥\n"
-        else:
-            header = ""
-
-        def format_message(title):
-            time_str = now_kst.strftime('%y%m%d %H:%M')
-            msg = f"{header}<b>{title}</b>\n\n"
-            msg += f"알림시각 : {time_str}\n"
-            msg += "상품가격(현재가/3주 최저가)\n"
-            for name in ["daypack", "allday", "daynhalf"]:
-                if name in current_results:
-                    res = current_results[name]
-                    msg += f"-{name.upper()} : {res['curr_price']:,} / {res['low_price']:,}\n"
-            return msg.strip()
-            
-        cron_trigger = os.environ.get('CRON_TRIGGER', '')
-        is_regular_report = (cron_trigger == '0 0,12 * * *') or (cron_trigger == '')
         
-        inline_keyboard = []
-        for name in ["daypack", "allday", "daynhalf"]:
-            if name in current_results:
-                inline_keyboard.append([{"text": f"🛒 {name.upper()} 최저가 바로가기", "url": current_results[name]['buy_url']}])
-                
-        reply_markup = {"inline_keyboard": inline_keyboard}
-        
-        if is_regular_report:
-            return [
-                {"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup},
-                {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
-            ]
-            
-        return [
-            {"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}
-        ]
+        messages = build_messages(current_results, history, new_records_triggered, now_kst, graph_file)
+        send_telegram(messages)
         
     except Exception as e:
-        return [
-            {"target": "watch", "text": f"⚠️ 가격 조회 실패.\n에러: {e}", "graph": None, "reply_markup": None}
-        ]
+        error_msg = [{"target": "watch", "text": f"⚠️ 가격 조회 시스템 에러 발생:\n{str(e)}", "graph": None, "reply_markup": None}]
+        send_telegram(error_msg)
     finally:
         driver.quit()
 
-def send_telegram(results):
-    if not results:
-        return
-        
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    if not chat_id:
-        print("텔레그램 챗봇 ID가 누락되었습니다.")
-        return
-        
-    for item in results:
-        target = item["target"]
-        text = item["text"]
-        graph_file = item.get("graph")
-        reply_markup = item.get("reply_markup")
-        
-        if target == "regular":
-            token = os.environ.get('TELEGRAM_TOKEN_REGULAR')
-        else:
-            token = os.environ.get('TELEGRAM_TOKEN')
-            
-        if not token:
-            print(f"[{target}] 봇 토큰이 누락되었습니다.")
-            continue
-            
-        data = {
-            'chat_id': chat_id,
-            'caption': text,
-            'parse_mode': 'HTML'
-        }
-        if reply_markup:
-            data['reply_markup'] = json.dumps(reply_markup)
-            
-        if graph_file and os.path.exists(graph_file):
-            url = f"https://api.telegram.org/bot{token}/sendPhoto"
-            with open(graph_file, 'rb') as f:
-                requests.post(url, data=data, files={'photo': f})
-        else:
-            url = f"https://api.telegram.org/bot{token}/sendMessage"
-            data['text'] = data.pop('caption')
-            requests.post(url, data=data)
-
 if __name__ == "__main__":
-    results = get_lowest_price()
-    send_telegram(results)
+    main()
