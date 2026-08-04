@@ -196,15 +196,16 @@ def draw_graph(full_history):
             higher_count = sum(
                 1 for nm, data in exact_stats.items()
                 if nm != item_name and data
-                for d, p in [data[-1] if data else (None, None)] # 간소화된 추적
+                for d, p in [data[-1] if data else (None, None)]
                 if [val for d_val, val in data if d_val <= dt_obj] 
                 and abs([val for d_val, val in data if d_val <= dt_obj][-1] - txt) < 15
                 and ([val for d_val, val in data if d_val <= dt_obj][-1] > txt or 
                     ([val for d_val, val in data if d_val <= dt_obj][-1] == txt and nm > item_name))
             )
             
-            xy_offsets = [(0, 16), (0, -14), (0, -36)]
-            time_offsets = [(0, 6), (0, -23), (0, -45)]
+            # 💡 가격 말풍선과 시간 간격을 넓히고 정렬을 맞춤 (Y축 간격 16px 통일)
+            xy_offsets = [(0, 24), (0, -16), (0, -48)]
+            time_offsets = [(0, 8), (0, -32), (0, -64)]
             offset_idx = min(higher_count, 2)
 
             ann = ax.annotate(f"{txt:,.0f}k", (dt_obj, txt), 
