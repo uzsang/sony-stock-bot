@@ -3,7 +3,7 @@ name: Sony Stock Checker
 on:
   schedule:
     - cron: '0 23 * * *'   # 💡 매일 KST 오전 8시 (UTC 23시) 정기 브리핑
-    - cron: '*/5 * * * *'  # 5분마다 가격 갱신 체크 (수시 브리핑용)
+#    - cron: '*/5 * * * *'  # 5분마다 가격 갱신 체크 (수시 브리핑용)
   workflow_dispatch:
 
 jobs:
