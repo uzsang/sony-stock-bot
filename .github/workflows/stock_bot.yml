@@ -24,6 +24,6 @@ jobs:
 
       - name: 주식 차트 스크립트 실행 및 텔레그램 전송
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN_REGULAR }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python stock_bot.py
