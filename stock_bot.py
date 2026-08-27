@@ -37,9 +37,10 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     ax.set_ylabel('Price')
     ax.grid(True, linestyle='--', alpha=0.6)
     
-    # [오른쪽 Y축] 환율 변동 비율 시각화 (점선)
+    # [오른쪽 Y축] 환율 변동 비율 시각화 (선 두께 1.0, 투명도 50% 적용)
     ax2 = ax.twinx()
-    line3 = ax2.plot(krw_pct.index, krw_pct, label=f'USD/KRW % (Base: {base_exchange_rate:.1f}원)', color='tab:green', linestyle='--', alpha=0.8)
+    line3 = ax2.plot(krw_pct.index, krw_pct, label=f'USD/KRW % (Base: {base_exchange_rate:.1f}원)', 
+                     color='tab:green', linestyle='--', linewidth=1.0, alpha=0.5)
     ax2.set_ylabel('Exchange Rate (%)')
     
     # 양쪽 Y축의 범례(Legend)를 하나로 묶어서 표시
