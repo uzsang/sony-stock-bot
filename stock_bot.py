@@ -8,49 +8,37 @@ from datetime import datetime
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-# 조회할 티커 심볼
+# 조회할 티커 심볼 (한국 상장 TIGER ETF 시리즈)
 tickers = {
-    'S&P 500': '^GSPC', 
-    'Nasdaq 100': '^NDX', 
-    'SCHD': 'SCHD'
+    'TIGER US S&P 500': '360750.KS', 
+    'TIGER US NASDAQ 100': '133690.KS', 
+    'TIGER US Dividend Dow Jones (SCHD)': '458730.KS'
 }
-
-# 1년 전 환율을 기준(a)으로 퍼센트 데이터 생성
-krw_data = yf.download('KRW=X', period='1y')
-base_exchange_rate = float(krw_data['Close'].iloc[0]) # 1년 전 오늘의 환율 (a)
-krw_pct = (krw_data['Close'] / base_exchange_rate) * 100 # (각 일자 환율 / a) * 100
 
 # 3개의 서브플롯 생성
 fig, axes = plt.subplots(3, 1, figsize=(10, 12))
 today_str = datetime.now().strftime("%Y-%m-%d")
-fig.suptitle(f'Market 1-Year Trend & USD/KRW Rate ({today_str})', fontsize=16)
+fig.suptitle(f'Korean Listed US ETFs 1-Year Trend ({today_str})', fontsize=16)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
-    # 주가 데이터 다운로드 및 3개월(60일) 이동평균선 계산
+    # 최근 1년치 데이터 다운로드
     data = yf.download(ticker, period='1y')
+    
+    # 3개월(약 60 거래일) 이동평균선 계산
     data['3M_MA'] = data['Close'].rolling(window=60).mean()
     
-    # [왼쪽 Y축] 종가 및 3개월 이동평균선 시각화
-    line1 = ax.plot(data.index, data['Close'], label='Close Price', color='tab:blue', alpha=0.6)
-    line2 = ax.plot(data.index, data['3M_MA'], label='3-Month MA', color='tab:orange', linewidth=2)
+    # 종가(Close)와 3개월 이동평균선(3M_MA) 시각화
+    ax.plot(data.index, data['Close'], label='Close Price', color='tab:blue', alpha=0.6)
+    ax.plot(data.index, data['3M_MA'], label='3-Month MA', color='tab:orange', linewidth=2)
+    
     ax.set_title(name)
-    ax.set_ylabel('Price')
+    ax.set_ylabel('Price (KRW)')
     ax.grid(True, linestyle='--', alpha=0.6)
-    
-    # [오른쪽 Y축] 환율 변동 비율 시각화 (선 두께 1.0, 투명도 50% 적용)
-    ax2 = ax.twinx()
-    line3 = ax2.plot(krw_pct.index, krw_pct, label=f'USD/KRW % (Base: {base_exchange_rate:.1f}원)', 
-                     color='tab:green', linestyle='--', linewidth=1.0, alpha=0.5)
-    ax2.set_ylabel('Exchange Rate (%)')
-    
-    # 양쪽 Y축의 범례(Legend)를 하나로 묶어서 표시
-    lines = line1 + line2 + line3
-    labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, loc='upper left')
+    ax.legend(loc='upper left')
 
 # 레이아웃 간격 조정 및 이미지 저장
 plt.tight_layout()
-image_path = 'stock_chart_with_krw.png'
+image_path = 'tiger_etf_chart.png'
 plt.savefig(image_path)
 
 # 텔레그램으로 이미지 전송
@@ -58,6 +46,6 @@ url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
 with open(image_path, 'rb') as photo:
     payload = {
         'chat_id': TELEGRAM_CHAT_ID,
-        'caption': f'📊 주요 지수 및 환율 1년치 차트입니다. ({today_str})\n초록색 점선은 1년 전 환율({base_exchange_rate:.1f}원) 대비 현재 비율입니다.'
+        'caption': f'📊 국내 상장 미국 ETF 1년치 차트입니다. ({today_str})\n파란선: 현재가 / 주황선: 3개월(60일) 이동평균선\n\n*환율이 이미 반영된 원화(KRW) 기준 가격입니다.'
     }
     requests.post(url, data=payload, files={'photo': photo})
