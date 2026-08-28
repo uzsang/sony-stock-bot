@@ -1,46 +1,82 @@
-import os
 import yfinance as yf
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
+import matplotlib.dates as mdates
 import requests
+import os
+from datetime import datetime
 
-# GitHub Actions Secrets에서 텔레그램 토큰 및 챗 ID 로드
+# 텔레그램 설정
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-CHAT_ID = os.environ.get('CHAT_ID')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-def fetch_data(ticker="SONY", period="1y"):
-    """야후 파이낸스에서 주가 데이터를 가져오고 60일 이동평균선을 계산합니다."""
-    df = yf.download(ticker, period=period)
-    
-    # 60일 이동평균선 계산
-    df['60_MA'] = df['Close'].rolling(window=60).mean()
-    
-    # 결측치 제거
-    df = df.dropna()
-    return df
+# 조회할 티커 심볼
+tickers = {
+    'TIGER US S&P 500': '360750.KS', 
+    'TIGER US NASDAQ 100': '133690.KS', 
+    'TIGER US Dividend Dow Jones': '458730.KS'
+}
 
-def predict_price(df):
-    """scikit-learn을 이용해 내일의 주가를 간단히 예측합니다."""
-    df = df.copy()
-    df['Days'] = np.arange(len(df))
-    
-    # .values를 사용하여 numpy 배열로 변환 (경고 방지)
-    X = df[['Days']].values 
-    y = df['Close'].values
-    
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    # 다음 날 예측 (단일 2D 배열로 전달)
-    next_day_X = np.array([[len(df)]에러의 원인은 scikit-learn의 `predict()` 메서드가 단일 숫자가 아닌 NumPy 배열(예: `[85000.5]`)을 반환하기 때문입니다. 92번째 줄의 텔레그램 메시지 f-string에서 이 배열 객체에 `:.2f`나 `:,` 같은 숫자 포맷팅을 직접 적용하려고 시도하면서 `TypeError`가 발생했습니다.
+# 모던 디자인 색상 팔레트
+MAIN_COLOR = '#1A73E8'  # 구글 톤의 맑은 파란색
+MA_COLOR = '#FF9500'    # 애플 톤의 직관적인 오렌지색
+TEXT_COLOR = '#202124'  # 진한 흑회색
+SUB_TEXT_COLOR = '#5F6368' # 부드러운 회색
+BG_COLOR = '#FFFFFF'    # 순백색 배경
+GRID_COLOR = '#F1F3F4'  # 연한 눈금선
 
-**치명적 에러 해결 방법 (Line 92)**
+fig, axes = plt.subplots(3, 1, figsize=(10, 14), facecolor=BG_COLOR)
+today_str = datetime.now().strftime("%B %d, %Y")
 
-f-string으로 포맷팅하기 전에 `[0]` 인덱스나 `.item()`을 사용하여 NumPy 배열에서 스칼라(단일 숫자) 값을 먼저 추출해야 합니다.
+# 전체 제목 
+fig.suptitle('Market Overview', fontsize=24, fontweight='bold', color=TEXT_COLOR, y=0.95)
+fig.text(0.5, 0.92, f'Korean Listed US ETFs 1-Year Trend ({today_str})', 
+         ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
-*수정 전 (에러 발생 추정 코드):*
-```python
-predicted_price = model.predict(X_new)
-message = f"📊 {ticker} 자동 주가 분석\n\n예상가: {predicted_price:,.0f}원"
+for ax, (name, ticker) in zip(axes, tickers.items()):
+    ax.set_facecolor(BG_COLOR)
+    
+    # 데이터 다운로드 및 60일 이평선 계산
+    data = yf.download(ticker, period='1y')
+    data['3M_MA'] = data['Close'].rolling(window=60).mean()
+    
+    # 메인 주가 선 및 아래 영역 색칠 (Area Chart 느낌)
+    ax.plot(data.index, data['Close'], color=MAIN_COLOR, linewidth=2.5, label='Price')
+    ax.fill_between(data.index, data['Close'], color=MAIN_COLOR, alpha=0.05)
+    
+    # 3개월 이동평균선
+    ax.plot(data.index, data['3M_MA'], color=MA_COLOR, linewidth=2, label='3-Month MA')
+    
+    # 개별 차트 제목 (왼쪽 위 정렬)
+    ax.text(0.0, 1.05, name, transform=ax.transAxes, fontsize=14, fontweight='bold', color=TEXT_COLOR)
+    
+    # 불필요한 테두리(Spine) 완벽 제거
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+        
+    # 부드러운 가로 눈금선만 추가
+    ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=1.5)
+    ax.grid(axis='x', visible=False)
+    
+    # 축 라벨 디자인 단순화 (눈금선 삭제, 글씨 색상 조정)
+    ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
+    
+    # X축 날짜 포맷 깔끔하게 변경 (예: Jan 2026)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    
+    # 범례 디자인 (테두리 삭제, 우측 상단 배치)
+    ax.legend(loc='upper right', frameon=False, fontsize=11, labelcolor=SUB_TEXT_COLOR)
+
+# 여백 조정 및 고화질 저장
+plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+image_path = 'tiger_etf_modern.png'
+plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
+
+# 텔레그램 전송
+url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+with open(image_path, 'rb') as photo:
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'caption': f'📊 오늘의 주식 시장 요약입니다. ({today_str})\n파란선: 현재가 / 주황선: 3개월 이동평균선'
+    }
+    requests.post(url, data=payload, files={'photo': photo})
