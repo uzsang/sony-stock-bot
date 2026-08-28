@@ -24,12 +24,13 @@ SUB_TEXT_COLOR = '#5F6368'
 BG_COLOR = '#FFFFFF'    
 GRID_COLOR = '#F1F3F4'  
 
-fig, axes = plt.subplots(3, 1, figsize=(10, 15), facecolor=BG_COLOR)
+# 아이폰 13 화면 비율(19.5:9)에 맞춘 figsize 적용
+fig, axes = plt.subplots(3, 1, figsize=(9, 19.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 전체 제목
-fig.suptitle('Market Overview', fontsize=24, fontweight='bold', color=TEXT_COLOR, y=0.96)
-fig.text(0.5, 0.93, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+# 전체 제목 (글자 굵기 약간 완화)
+fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.96)
+fig.text(0.5, 0.94, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
@@ -56,8 +57,8 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # 60일(약 3개월) 이동평균선: 더 얇게(1.0), 투명하게(0.8)
     ax.plot(close_prices.index, ma_60, color=MA_COLOR, linewidth=1.0, alpha=0.8, label='60-Day MA')
     
-    # 개별 차트 제목 가운데 정렬
-    ax.set_title(name, fontsize=14, fontweight='bold', color=TEXT_COLOR, pad=15, loc='center')
+    # 개별 차트 제목 가운데 정렬 및 글자 굵기 줄임(normal)
+    ax.set_title(name, fontsize=14, fontweight='normal', color=TEXT_COLOR, pad=15, loc='center')
     
     # 불필요한 테두리(Spine) 완벽 제거
     for spine in ax.spines.values():
@@ -77,8 +78,8 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # 범례가 그래프를 가리지 않도록 차트 우측 상단 밖으로 배치
     ax.legend(loc='lower right', bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=10, labelcolor=SUB_TEXT_COLOR, ncol=2)
 
-# 여백 및 그래프 간 간격(h_pad)을 넓게 조정
-plt.tight_layout(rect=[0, 0.03, 1, 0.90], h_pad=5.0)
+# 여백 및 그래프 간 간격(h_pad) 조정
+plt.tight_layout(rect=[0, 0.03, 1, 0.92], h_pad=5.0)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
