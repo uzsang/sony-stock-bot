@@ -1,51 +1,104 @@
-import yfinance as yf
-import matplotlib.pyplot as plt
-import requests
 import os
-from datetime import datetime
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+import requests
 
-# 환경 변수에서 텔레그램 토큰 및 챗 ID 불러오기
+# GitHub Actions Secrets에서 텔레그램 토큰 및 챗 ID 로드
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+CHAT_ID = os.environ.get('CHAT_ID')
 
-# 조회할 티커 심볼 (한국 상장 TIGER ETF 시리즈)
-tickers = {
-    'TIGER US S&P 500': '360750.KS', 
-    'TIGER US NASDAQ 100': '133690.KS', 
-    'TIGER US Dividend Dow Jones (SCHD)': '458730.KS'
-}
-
-# 3개의 서브플롯 생성
-fig, axes = plt.subplots(3, 1, figsize=(10, 12))
-today_str = datetime.now().strftime("%Y-%m-%d")
-fig.suptitle(f'Korean Listed US ETFs 1-Year Trend ({today_str})', fontsize=16)
-
-for ax, (name, ticker) in zip(axes, tickers.items()):
-    # 최근 1년치 데이터 다운로드
-    data = yf.download(ticker, period='1y')
+def fetch_data(ticker="SONY", period="1y"):
+    """야후 파이낸스에서 주가 데이터를 가져오고 필요한 이동평균선만 계산합니다."""
+    df = yf.download(ticker, period=period)
     
-    # 3개월(약 60 거래일) 이동평균선 계산
-    data['3M_MA'] = data['Close'].rolling(window=60).mean()
+    # 200일 이동평균선 제거됨
+    # 50일 이동평균선만 계산
+    df['50_MA'] = df['Close'].rolling(window=50).mean()
     
-    # 종가(Close)와 3개월 이동평균선(3M_MA) 시각화
-    ax.plot(data.index, data['Close'], label='Close Price', color='tab:blue', alpha=0.6)
-    ax.plot(data.index, data['3M_MA'], label='3-Month MA', color='tab:orange', linewidth=2)
+    # 결측치 제거
+    df = df.dropna()
+    return df
+
+def predict_price(df):
+    """scikit-learn을 이용해 내일의 주가를 간단히 예측합니다."""
+    # 날짜를 연속된 숫자로 변환하여 학습 데이터로 사용
+    df = df.copy()
+    df['Days'] = np.arange(len(df))
     
-    ax.set_title(name)
-    ax.set_ylabel('Price (KRW)')
-    ax.grid(True, linestyle='--', alpha=0.6)
-    ax.legend(loc='upper left')
+    X = df[['Days']]
+    y = df['Close']
+    
+    model = LinearRegression()
+    model.fit(X, y)
+    
+    # 다음 날(len(df)) 예측
+    next_day = pd.DataFrame({'Days': [len(df)]})
+    predicted_price = model.predict(next_day)[0]
+    
+    return predicted_price
 
-# 레이아웃 간격 조정 및 이미지 저장
-plt.tight_layout()
-image_path = 'tiger_etf_chart.png'
-plt.savefig(image_path)
+def plot_chart(df, ticker="SONY"):
+    """matplotlib을 사용하여 가격과 50일 이동평균선을 시각화합니다."""
+    plt.figure(figsize=(10, 6))
+    
+    # 실제 주가 및 50일선 플로팅 (200일선 제외)
+    plt.plot(df.index, df['Close'], label='Close Price', color='blue', linewidth=1.5)
+    plt.plot(df.index, df['50_MA'], label='50-Day MA', color='orange', linestyle='--')
+    
+    plt.title(f'{ticker} Stock Price History')
+    plt.xlabel('Date')
+    plt.ylabel('Price (USD)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # 이미지 파일로 저장
+    chart_path = 'stock_chart.png'
+    plt.savefig(chart_path, bbox_inches='tight')
+    plt.close()
+    
+    return chart_path
 
-# 텔레그램으로 이미지 전송
-url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
-with open(image_path, 'rb') as photo:
-    payload = {
-        'chat_id': TELEGRAM_CHAT_ID,
-        'caption': f'📊 국내 상장 미국 ETF 1년치 차트입니다. ({today_str})\n파란선: 현재가 / 주황선: 3개월(60일) 이동평균선\n\n*환율이 이미 반영된 원화(KRW) 기준 가격입니다.'
-    }
-    requests.post(url, data=payload, files={'photo': photo})
+def send_telegram_notification(message, image_path):
+    """텔레그램 봇 API를 통해 텍스트와 차트 이미지를 전송합니다."""
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        print("Error: TELEGRAM_TOKEN 또는 CHAT_ID가 설정되지 않았습니다.")
+        return
+
+    # 1. 텍스트 메시지 전송
+    text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(text_url, data={'chat_id': CHAT_ID, 'text': message})
+    
+    # 2. 차트 이미지 전송
+    photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+    with open(image_path, 'rb') as photo:
+        requests.post(photo_url, data={'chat_id': CHAT_ID}, files={'photo': photo})
+
+def main():
+    ticker = "SONY"
+    
+    # 1. 데이터 수집
+    df = fetch_data(ticker)
+    
+    # 2. 모델 훈련 및 가격 예측
+    predicted_price = predict_price(df)
+    current_price = float(df['Close'].iloc[-1])
+    
+    # 3. 차트 생성
+    chart_path = plot_chart(df, ticker)
+    
+    # 4. 텔레그램 메시지 포맷팅 및 발송
+    message = (
+        f"📊 {ticker} 자동 주가 분석\n\n"
+        f"▪️ 현재가: ${current_price:.2f}\n"
+        f"▪️ AI 예측가(내일): ${predicted_price:.2f}\n\n"
+        f"* 200일 이동평균선이 차트에서 제거되었습니다."
+    )
+    
+    send_telegram_notification(message, chart_path)
+    print("알림 전송이 완료되었습니다.")
+
+if __name__ == "__main__":
+    main()
