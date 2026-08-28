@@ -20,7 +20,7 @@ jobs:
 
       - name: 필수 라이브러리 설치
         run: |
-          pip install yfinance matplotlib requests pandas
+          pip install yfinance matplotlib requests pandas sklearn
 
       - name: 주식 차트 스크립트 실행 및 텔레그램 전송
         env:
