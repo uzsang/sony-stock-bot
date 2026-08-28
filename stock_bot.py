@@ -17,49 +17,47 @@ tickers = {
 }
 
 # 모던 디자인 색상 팔레트
-MAIN_COLOR = '#1A73E8'  # 구글 톤의 맑은 파란색
-MA_COLOR = '#FF9500'    # 애플 톤의 직관적인 오렌지색
-TEXT_COLOR = '#202124'  # 진한 흑회색
-SUB_TEXT_COLOR = '#5F6368' # 부드러운 회색
-BG_COLOR = '#FFFFFF'    # 순백색 배경
-GRID_COLOR = '#F1F3F4'  # 연한 눈금선
+MAIN_COLOR = '#1A73E8'  
+MA_COLOR = '#FF9500'    
+TEXT_COLOR = '#202124'  
+SUB_TEXT_COLOR = '#5F6368' 
+BG_COLOR = '#FFFFFF'    
+GRID_COLOR = '#F1F3F4'  
 
 fig, axes = plt.subplots(3, 1, figsize=(10, 15), facecolor=BG_COLOR)
-today_str = datetime.now().strftime("%B %d, %Y")
+today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 전체 제목 (1-Year -> 3-Year 로 변경)
-fig.suptitle('Market Overview', fontsize=24, fontweight='bold', color=TEXT_COLOR, y=0.95)
-fig.text(0.5, 0.92, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+# 전체 제목
+fig.suptitle('Market Overview', fontsize=24, fontweight='bold', color=TEXT_COLOR, y=0.96)
+fig.text(0.5, 0.93, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
     ax.set_facecolor(BG_COLOR)
     
-    # 3년치(3y) 데이터 다운로드
+    # 3년치 데이터 다운로드
     data = yf.download(ticker, period='3y')
-    
-    # yfinance 다중 인덱스 반환 이슈 해결
     close_prices = data['Close'].squeeze()
     
     # 60일 이평선 계산
     ma_60 = close_prices.rolling(window=60).mean()
     
-    # Y축 최소값/최대값 타이트하게 계산 (불필요한 밑공간 제거)
+    # Y축 최소값/최대값 타이트하게 계산
     min_price = close_prices.min()
     max_price = close_prices.max()
-    padding = (max_price - min_price) * 0.1  # 위아래 10% 여백
+    padding = (max_price - min_price) * 0.1
     bottom_limit = min_price - padding
     ax.set_ylim(bottom_limit, max_price + padding)
     
-    # 메인 주가 선 및 아래 영역 색칠 (하단 한계선까지 채움)
-    ax.plot(close_prices.index, close_prices, color=MAIN_COLOR, linewidth=2.5, label='Price')
+    # 메인 주가 선: 얇게(1.2), 투명하게(0.8)
+    ax.plot(close_prices.index, close_prices, color=MAIN_COLOR, linewidth=1.2, alpha=0.8, label='Price')
     ax.fill_between(close_prices.index, close_prices, bottom_limit, color=MAIN_COLOR, alpha=0.05)
     
-    # 60일(약 3개월) 이동평균선
-    ax.plot(close_prices.index, ma_60, color=MA_COLOR, linewidth=2, label='60-Day MA')
+    # 60일(약 3개월) 이동평균선: 더 얇게(1.0), 투명하게(0.8)
+    ax.plot(close_prices.index, ma_60, color=MA_COLOR, linewidth=1.0, alpha=0.8, label='60-Day MA')
     
-    # 개별 차트 제목 (왼쪽 위 정렬)
-    ax.text(0.0, 1.05, name, transform=ax.transAxes, fontsize=14, fontweight='bold', color=TEXT_COLOR)
+    # 개별 차트 제목 가운데 정렬
+    ax.set_title(name, fontsize=14, fontweight='bold', color=TEXT_COLOR, pad=15, loc='center')
     
     # 불필요한 테두리(Spine) 완벽 제거
     for spine in ax.spines.values():
@@ -72,15 +70,15 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # 축 라벨 디자인 단순화
     ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
     
-    # X축 날짜 포맷 및 간격 조정 (3년치이므로 6개월 간격으로 쾌적하게 표시)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    # X축 날짜 포맷을 '연도-월' 형태의 숫자로 변경 (예: 2026-01)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
     
-    # 범례 디자인
-    ax.legend(loc='upper right', frameon=False, fontsize=11, labelcolor=SUB_TEXT_COLOR)
+    # 범례가 그래프를 가리지 않도록 차트 우측 상단 밖으로 배치
+    ax.legend(loc='lower right', bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=10, labelcolor=SUB_TEXT_COLOR, ncol=2)
 
-# 여백 및 그래프 간 간격(h_pad) 시원하게 조정
-plt.tight_layout(rect=[0, 0.03, 1, 0.90], h_pad=4.0)
+# 여백 및 그래프 간 간격(h_pad)을 넓게 조정
+plt.tight_layout(rect=[0, 0.03, 1, 0.90], h_pad=5.0)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
@@ -92,4 +90,3 @@ with open(image_path, 'rb') as photo:
         'caption': f'📊 오늘의 주식 시장 요약입니다. ({today_str})\n파란선: 현재가 / 주황선: 60일(3개월) 이동평균선'
     }
     requests.post(url, data=payload, files={'photo': photo})
-
