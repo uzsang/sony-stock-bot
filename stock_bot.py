@@ -26,77 +26,21 @@ def predict_price(df):
     df = df.copy()
     df['Days'] = np.arange(len(df))
     
-    X = df[['Days']]
-    y = df['Close']
+    # .values를 사용하여 numpy 배열로 변환 (경고 방지)
+    X = df[['Days']].values 
+    y = df['Close'].values
     
     model = LinearRegression()
     model.fit(X, y)
     
-    # 다음 날 예측
-    next_day = pd.DataFrame({'Days': [len(df)]})
-    predicted_price = model.predict(next_day)[0]
-    
-    return predicted_price
+    # 다음 날 예측 (단일 2D 배열로 전달)
+    next_day_X = np.array([[len(df)]에러의 원인은 scikit-learn의 `predict()` 메서드가 단일 숫자가 아닌 NumPy 배열(예: `[85000.5]`)을 반환하기 때문입니다. 92번째 줄의 텔레그램 메시지 f-string에서 이 배열 객체에 `:.2f`나 `:,` 같은 숫자 포맷팅을 직접 적용하려고 시도하면서 `TypeError`가 발생했습니다.
 
-def plot_chart(df, ticker="SONY"):
-    """matplotlib을 사용하여 가격과 60일 이동평균선을 시각화합니다."""
-    plt.figure(figsize=(10, 6))
-    
-    # 실제 주가 및 60일선 플로팅
-    plt.plot(df.index, df['Close'], label='Close Price', color='blue', linewidth=1.5)
-    plt.plot(df.index, df['60_MA'], label='60-Day MA', color='orange', linestyle='--')
-    
-    plt.title(f'{ticker} Stock Price History')
-    plt.xlabel('Date')
-    plt.ylabel('Price (USD)')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # 이미지 파일로 저장
-    chart_path = 'stock_chart.png'
-    plt.savefig(chart_path, bbox_inches='tight')
-    plt.close()
-    
-    return chart_path
+**치명적 에러 해결 방법 (Line 92)**
 
-def send_telegram_notification(message, image_path):
-    """텔레그램 봇 API를 통해 텍스트와 차트 이미지를 전송합니다."""
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Error: TELEGRAM_TOKEN 또는 CHAT_ID가 설정되지 않았습니다.")
-        return
+f-string으로 포맷팅하기 전에 `[0]` 인덱스나 `.item()`을 사용하여 NumPy 배열에서 스칼라(단일 숫자) 값을 먼저 추출해야 합니다.
 
-    # 1. 텍스트 메시지 전송
-    text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(text_url, data={'chat_id': CHAT_ID, 'text': message})
-    
-    # 2. 차트 이미지 전송
-    photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
-    with open(image_path, 'rb') as photo:
-        requests.post(photo_url, data={'chat_id': CHAT_ID}, files={'photo': photo})
-
-def main():
-    ticker = "SONY"
-    
-    # 1. 데이터 수집
-    df = fetch_data(ticker)
-    
-    # 2. 모델 훈련 및 가격 예측
-    predicted_price = predict_price(df)
-    current_price = float(df['Close'].iloc[-1])
-    
-    # 3. 차트 생성
-    chart_path = plot_chart(df, ticker)
-    
-    # 4. 텔레그램 메시지 포맷팅 및 발송
-    message = (
-        f"📊 {ticker} 자동 주가 분석\n\n"
-        f"▪️ 현재가: ${current_price:.2f}\n"
-        f"▪️ AI 예측가(내일): ${predicted_price:.2f}\n\n"
-        f"* 60일 이동평균선이 적용되었습니다."
-    )
-    
-    send_telegram_notification(message, chart_path)
-    print("알림 전송이 완료되었습니다.")
-
-if __name__ == "__main__":
-    main()
+*수정 전 (에러 발생 추정 코드):*
+```python
+predicted_price = model.predict(X_new)
+message = f"📊 {ticker} 자동 주가 분석\n\n예상가: {predicted_price:,.0f}원"
