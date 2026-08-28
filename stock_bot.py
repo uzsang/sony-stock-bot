@@ -19,9 +19,9 @@ tickers = {
 # 모던 디자인 색상 팔레트
 MAIN_COLOR = '#1A73E8'     # 현재가 (파랑)
 MA_COLOR = '#FF9500'       # 이동평균선 (주황)
-RETURN_COLOR = '#34A853'   # 수익률 보조축 (초록)
+RETURN_COLOR = '#34A853'   # 수익률 보조선 (초록)
 TEXT_COLOR = '#202124'  
-SUB_TEXT_COLOR = '#5F6368' 
+SUB_TEXT_COLOR = '#5F6368' # 메인/보조축 공통 글자 색상
 BG_COLOR = '#FFFFFF'    
 GRID_COLOR = '#F1F3F4'  
 
@@ -29,7 +29,7 @@ GRID_COLOR = '#F1F3F4'
 fig, axes = plt.subplots(3, 1, figsize=(9, 15.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 전체 제목 (노치 간섭 방지를 위해 y값 조정)
+# 전체 제목
 fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.96)
 fig.text(0.5, 0.94, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
@@ -55,7 +55,7 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     bottom_limit = min_price - padding
     ax.set_ylim(bottom_limit, max_price + padding)
     
-    # 메인 주가 선: 얇게(1.2), 투명하게(0.8)
+    # 메인 주가 선
     line1 = ax.plot(close_prices.index, close_prices, color=MAIN_COLOR, linewidth=1.2, alpha=0.8, label='Price')
     ax.fill_between(close_prices.index, close_prices, bottom_limit, color=MAIN_COLOR, alpha=0.05)
     
@@ -64,10 +64,11 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     
     # === 보조축(수익률) 추가 ===
     ax2 = ax.twinx()
-    line3 = ax2.plot(close_prices.index, return_rates, color=RETURN_COLOR, linewidth=1.2, linestyle='--', alpha=0.7, label='Return Rate (%)')
+    # 수익률 line: 얇게(0.8), 투명도 80%(alpha=0.8)
+    line3 = ax2.plot(close_prices.index, return_rates, color=RETURN_COLOR, linewidth=0.8, linestyle='--', alpha=0.8, label='Return Rate (%)')
     
-    # 보조축 디자인
-    ax2.tick_params(axis='y', colors=RETURN_COLOR, labelsize=9, length=0, pad=10)
+    # 보조축 글자 색상을 메인축과 동일한 SUB_TEXT_COLOR로 통일
+    ax2.tick_params(axis='y', colors=SUB_TEXT_COLOR, labelsize=10, length=0, pad=10)
     for spine in ax2.spines.values():
         spine.set_visible(False)
     
@@ -82,19 +83,19 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=1.5)
     ax.grid(axis='x', visible=False)
     
-    # 축 라벨 디자인
+    # 주축 라벨 디자인
     ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
     
     # X축 날짜 포맷 ('연도-월')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
     
-    # 범례를 제목과 겹치지 않도록 차트 내부 우측 하단(loc='lower right')으로 배치
+    # 범례 설정
     lines = line1 + line2 + line3
     labels = [l.get_label() for l in lines]
     ax.legend(lines, labels, loc='lower right', frameon=True, facecolor=BG_COLOR, edgecolor='none', fontsize=9, labelcolor=SUB_TEXT_COLOR, ncol=1)
 
-# 여백 및 그래프 간 간격(h_pad) 조정
+# 여백 및 그래프 간 간격 조정
 plt.tight_layout(rect=[0, 0.02, 1, 0.91], h_pad=4.5)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
