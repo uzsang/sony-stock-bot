@@ -2,4 +2,4 @@ requests
 matplotlib
 numpy
 selenium
-skit-learn
+scikit-learn
