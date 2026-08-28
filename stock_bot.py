@@ -35,16 +35,21 @@ fig.text(0.5, 0.92, f'Korean Listed US ETFs 1-Year Trend ({today_str})',
 for ax, (name, ticker) in zip(axes, tickers.items()):
     ax.set_facecolor(BG_COLOR)
     
-    # 데이터 다운로드 및 60일 이평선 계산
+    # 데이터 다운로드
     data = yf.download(ticker, period='1y')
-    data['3M_MA'] = data['Close'].rolling(window=60).mean()
+    
+    # yfinance 다중 인덱스 반환 이슈 해결 (1차원 Series로 확실하게 추출)
+    close_prices = data['Close'].squeeze()
+    
+    # 60일 이평선 계산
+    ma_60 = close_prices.rolling(window=60).mean()
     
     # 메인 주가 선 및 아래 영역 색칠 (Area Chart 느낌)
-    ax.plot(data.index, data['Close'], color=MAIN_COLOR, linewidth=2.5, label='Price')
-    ax.fill_between(data.index, data['Close'], color=MAIN_COLOR, alpha=0.05)
+    ax.plot(close_prices.index, close_prices, color=MAIN_COLOR, linewidth=2.5, label='Price')
+    ax.fill_between(close_prices.index, close_prices, color=MAIN_COLOR, alpha=0.05)
     
-    # 3개월 이동평균선
-    ax.plot(data.index, data['3M_MA'], color=MA_COLOR, linewidth=2, label='3-Month MA')
+    # 60일(약 3개월) 이동평균선
+    ax.plot(close_prices.index, ma_60, color=MA_COLOR, linewidth=2, label='60-Day MA')
     
     # 개별 차트 제목 (왼쪽 위 정렬)
     ax.text(0.0, 1.05, name, transform=ax.transAxes, fontsize=14, fontweight='bold', color=TEXT_COLOR)
@@ -77,6 +82,6 @@ url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
 with open(image_path, 'rb') as photo:
     payload = {
         'chat_id': TELEGRAM_CHAT_ID,
-        'caption': f'📊 오늘의 주식 시장 요약입니다. ({today_str})\n파란선: 현재가 / 주황선: 3개월 이동평균선'
+        'caption': f'📊 오늘의 주식 시장 요약입니다. ({today_str})\n파란선: 현재가 / 주황선: 60일(3개월) 이동평균선'
     }
     requests.post(url, data=payload, files={'photo': photo})
