@@ -21,7 +21,7 @@ MAIN_COLOR = '#1A73E8'     # 현재가 (파랑)
 MA_COLOR = '#FF9500'       # 이동평균선 (주황)
 RETURN_COLOR = '#34A853'   # 수익률 보조선 (초록)
 TEXT_COLOR = '#202124'  
-SUB_TEXT_COLOR = '#5F6368' # 메인/보조축 공통 글자 색상
+SUB_TEXT_COLOR = '#5F6368' 
 BG_COLOR = '#FFFFFF'    
 GRID_COLOR = '#F1F3F4'  
 
@@ -29,9 +29,9 @@ GRID_COLOR = '#F1F3F4'
 fig, axes = plt.subplots(3, 1, figsize=(9, 15.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 전체 제목
-fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.96)
-fig.text(0.5, 0.94, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+# 전체 제목과 부제목 간격 분리 (겹침 방지)
+fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.97)
+fig.text(0.5, 0.945, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
@@ -44,11 +44,11 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # 60일 이평선 계산
     ma_60 = close_prices.rolling(window=60).mean()
     
-    # 해당일 구매 시 현재 수익률 계산 (%) = (현재가 - 과거가) / 과거가 * 100
+    # 해당일 구매 시 현재 수익률 계산 (%)
     current_price = close_prices.iloc[-1]
     return_rates = (current_price - close_prices) / close_prices * 100
     
-    # Y축 최소값/최대값 타이트하게 계산 (왼쪽 주축)
+    # Y축 최소값/최대값 타이트하게 계산
     min_price = close_prices.min()
     max_price = close_prices.max()
     padding = (max_price - min_price) * 0.1
@@ -64,16 +64,21 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     
     # === 보조축(수익률) 추가 ===
     ax2 = ax.twinx()
-    # 수익률 line: 얇게(0.8), 투명도 80%(alpha=0.8)
-    line3 = ax2.plot(close_prices.index, return_rates, color=RETURN_COLOR, linewidth=0.8, linestyle='--', alpha=0.8, label='Return Rate (%)')
+    # 수익률 line: 훨씬 얇게(0.5), 투명도 80%(alpha=0.8)
+    line3 = ax2.plot(close_prices.index, return_rates, color=RETURN_COLOR, linewidth=0.5, linestyle='--', alpha=0.8, label='Return Rate (%)')
     
-    # 보조축 글자 색상을 메인축과 동일한 SUB_TEXT_COLOR로 통일
+    # 보조축 글자 색상을 메인축과 동일한 색상으로 통일
     ax2.tick_params(axis='y', colors=SUB_TEXT_COLOR, labelsize=10, length=0, pad=10)
     for spine in ax2.spines.values():
         spine.set_visible(False)
     
-    # 개별 차트 제목 가운데 정렬
+    # 개별 차트 제목 설정
     ax.set_title(name, fontsize=13, fontweight='normal', color=TEXT_COLOR, pad=12, loc='center')
+    
+    # 범례를 그래프별 제목 옆(오른쪽 상단 바깥쪽)으로 배치하여 내용과 겹치지 않게 분리
+    lines = line1 + line2 + line3
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.0, 1.15), frameon=False, fontsize=8, labelcolor=SUB_TEXT_COLOR, ncol=3)
     
     # 주축 불필요한 테두리 제거
     for spine in ax.spines.values():
@@ -89,14 +94,9 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # X축 날짜 포맷 ('연도-월')
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
-    
-    # 범례 설정
-    lines = line1 + line2 + line3
-    labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, loc='lower right', frameon=True, facecolor=BG_COLOR, edgecolor='none', fontsize=9, labelcolor=SUB_TEXT_COLOR, ncol=1)
 
 # 여백 및 그래프 간 간격 조정
-plt.tight_layout(rect=[0, 0.02, 1, 0.91], h_pad=4.5)
+plt.tight_layout(rect=[0, 0.02, 1, 0.92], h_pad=5.5)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
