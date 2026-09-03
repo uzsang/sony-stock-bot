@@ -24,14 +24,15 @@ TEXT_COLOR = '#202124'
 SUB_TEXT_COLOR = '#5F6368' 
 BG_COLOR = '#FFFFFF'    
 GRID_COLOR = '#F1F3F4'  
+VERTICAL_GRID_COLOR = '#E8EAED' # 세로 그리드용 반투명 회색
 
 # 아이폰 화면비율에 맞춘 세로형 피겨 생성
 fig, axes = plt.subplots(3, 1, figsize=(9, 15.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 전체 제목과 부제목 간격 분리 (겹침 방지)
-fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.97)
-fig.text(0.5, 0.945, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+# 1. 전체 제목과 부제목 간격을 충분히 띄움
+fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.975)
+fig.text(0.5, 0.940, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
@@ -64,39 +65,39 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     
     # === 보조축(수익률) 추가 ===
     ax2 = ax.twinx()
-    # 수익률 line: 훨씬 얇게(0.5), 투명도 80%(alpha=0.8)
+    # 수익률 line: 얇게(0.5), 투명도 80%(alpha=0.8)
     line3 = ax2.plot(close_prices.index, return_rates, color=RETURN_COLOR, linewidth=0.5, linestyle='--', alpha=0.8, label='Return Rate (%)')
     
-    # 보조축 글자 색상을 메인축과 동일한 색상으로 통일
+    # 보조축 글자 색상 통일
     ax2.tick_params(axis='y', colors=SUB_TEXT_COLOR, labelsize=10, length=0, pad=10)
     for spine in ax2.spines.values():
         spine.set_visible(False)
     
     # 개별 차트 제목 설정
-    ax.set_title(name, fontsize=13, fontweight='normal', color=TEXT_COLOR, pad=12, loc='center')
+    ax.set_title(name, fontsize=13, fontweight='normal', color=TEXT_COLOR, pad=15, loc='center')
     
-    # 범례를 그래프별 제목 옆(오른쪽 상단 바깥쪽)으로 배치하여 내용과 겹치지 않게 분리
+    # 2. 범례를 두 줄(ncol=2)로 배치하여 제목과의 겹침 방지
     lines = line1 + line2 + line3
     labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.0, 1.15), frameon=False, fontsize=8, labelcolor=SUB_TEXT_COLOR, ncol=3)
+    ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.0, 1.18), frameon=False, fontsize=8.5, labelcolor=SUB_TEXT_COLOR, ncol=2)
     
     # 주축 불필요한 테두리 제거
     for spine in ax.spines.values():
         spine.set_visible(False)
         
-    # 가로 눈금선
+    # 3. 가로 및 세로 그리드(반투명 회색줄) 추가로 날짜 가늠 용이하게 설정
     ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=1.5)
-    ax.grid(axis='x', visible=False)
+    ax.grid(axis='x', color=VERTICAL_GRID_COLOR, linestyle='--', linewidth=0.8, alpha=0.7)
     
     # 주축 라벨 디자인
     ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
     
-    # X축 날짜 포맷 ('연도-월')
+    # 3. X축 날짜 간격을 3개월 단위로 설정
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
 
-# 여백 및 그래프 간 간격 조정
-plt.tight_layout(rect=[0, 0.02, 1, 0.92], h_pad=5.5)
+# 전체 여백 및 그래프 간 간격 조정 (상단 여백 rect탑을 0.91로 조정하여 타이틀 공간 확보)
+plt.tight_layout(rect=[0, 0.02, 1, 0.91], h_pad=5.5)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
