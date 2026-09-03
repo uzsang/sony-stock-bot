@@ -30,9 +30,9 @@ VERTICAL_GRID_COLOR = '#E8EAED'
 fig, axes = plt.subplots(3, 1, figsize=(9, 14.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 1. 전체 제목과 부제목 간격 확보 (y값 조정)
-fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.99)
-fig.text(0.5, 0.96, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+# 주제목과 부제목 사이 겹침 방지 간격(0.025) 설정
+fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.985)
+fig.text(0.5, 0.960, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
@@ -73,7 +73,7 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
         spine.set_visible(False)
     
     # 개별 차트 제목 설정
-    ax.set_title(name, fontsize=12, fontweight='normal', color=TEXT_COLOR, pad=10, loc='center', linespacing=1.3)
+    ax.set_title(name, fontsize=12, fontweight='normal', color=TEXT_COLOR, pad=8, loc='center', linespacing=1.3)
     
     # 범례를 그래프 내부 하단 중앙(loc='lower center')에 한 줄(ncol=3)로 배치
     lines = line1 + line2 + line3
@@ -98,8 +98,8 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # X축 날짜 값을 45도로 회전하고 우측 정렬
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
-# 2. 전체 여백 조정: rect의 상단 여백(0.94)을 조절하여 제목부와 그래프 영역 분리
-plt.tight_layout(rect=[0, 0.02, 1, 0.94], h_pad=3.5)
+# rect 상단 높이를 0.955로 올려 부제목과 첫 그래프 제목 간 여백을 밀착 축소
+plt.tight_layout(rect=[0, 0.02, 1, 0.955], h_pad=3.5)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
