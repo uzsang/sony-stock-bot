@@ -26,13 +26,13 @@ BG_COLOR = '#FFFFFF'
 GRID_COLOR = '#F1F3F4'  
 VERTICAL_GRID_COLOR = '#E8EAED' 
 
-# 아이폰 화면비율에 맞춘 세로형 피겨 생성
-fig, axes = plt.subplots(3, 1, figsize=(9, 14.5), facecolor=BG_COLOR)
+# 세로 비율을 줄여 그래프 간/상단 여백 밀착 (14.5 -> 12.5)
+fig, axes = plt.subplots(3, 1, figsize=(9, 12.5), facecolor=BG_COLOR)
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# 주제목과 부제목 사이 겹침 방지 간격(0.025) 설정
+# 주제목과 부제목 간격 유지
 fig.suptitle('Market Overview', fontsize=22, fontweight='medium', color=TEXT_COLOR, y=0.985)
-fig.text(0.5, 0.960, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
+fig.text(0.5, 0.958, f'Korean Listed US ETFs 3-Year Trend ({today_str})', 
          ha='center', fontsize=12, color=SUB_TEXT_COLOR)
 
 for ax, (name, ticker) in zip(axes, tickers.items()):
@@ -73,9 +73,9 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
         spine.set_visible(False)
     
     # 개별 차트 제목 설정
-    ax.set_title(name, fontsize=12, fontweight='normal', color=TEXT_COLOR, pad=8, loc='center', linespacing=1.3)
+    ax.set_title(name, fontsize=12, fontweight='normal', color=TEXT_COLOR, pad=6, loc='center', linespacing=1.2)
     
-    # 범례를 그래프 내부 하단 중앙(loc='lower center')에 한 줄(ncol=3)로 배치
+    # 범례를 그래프 내부 하단 중앙(loc='lower center')에 배치
     lines = line1 + line2 + line3
     labels = [l.get_label() for l in lines]
     ax.legend(lines, labels, loc='lower center', frameon=True, facecolor=BG_COLOR, edgecolor='none', fontsize=8, labelcolor=SUB_TEXT_COLOR, ncol=3)
@@ -91,15 +91,13 @@ for ax, (name, ticker) in zip(axes, tickers.items()):
     # 주축 라벨 디자인
     ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
     
-    # X축 날짜 3개월 간격 설정
+    # X축 날짜 3개월 간격 설정 및 45도 회전
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    
-    # X축 날짜 값을 45도로 회전하고 우측 정렬
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
-# rect 상단 높이를 0.955로 올려 부제목과 첫 그래프 제목 간 여백을 밀착 축소
-plt.tight_layout(rect=[0, 0.02, 1, 0.955], h_pad=3.5)
+# rect 상단을 0.945로 끌어올리고 그래프 간 간격(h_pad)을 조율하여 부제목 바로 아래에 첫 그래프 배치
+plt.tight_layout(rect=[0, 0.01, 1, 0.945], h_pad=2.8)
 image_path = 'tiger_etf_modern.png'
 plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
 
