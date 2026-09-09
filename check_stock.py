@@ -14,6 +14,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from sklearn.linear_model import LinearRegression
+
 ITEMS_INFO = {
     "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
@@ -24,11 +25,7 @@ HISTORY_FILE = 'price_history.json'
 GRAPH_FILE = 'price_graph.png'
 TARGET_PRICE = 150
 
-# ==========================================
-# 2. 데이터 처리 및 유틸리티 (Data & Utils)
-# ==========================================
 def load_history(filepath):
-    """JSON 파일에서 과거 데이터를 불러옵니다."""
     if os.path.exists(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             try:
@@ -38,12 +35,10 @@ def load_history(filepath):
     return []
 
 def save_history(filepath, history_data):
-    """업데이트된 데이터를 JSON 파일에 저장합니다."""
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(history_data, f, ensure_ascii=False, indent=2)
 
 def extract_buy_url(price_element, default_url):
-    """가격 요소에서 가장 안전한 구매 링크를 추출합니다."""
     try:
         li_parent = price_element.find_element(By.XPATH, "./ancestor::li[1]")
         link_el = li_parent.find_element(By.CSS_SELECTOR, ".prod_pricelist li:first-child a")
@@ -52,20 +47,15 @@ def extract_buy_url(price_element, default_url):
             return url
     except Exception:
         pass
-    
     try:
         return price_element.find_element(By.XPATH, "./ancestor::a").get_attribute("href")
     except Exception:
         return default_url
 
-# ==========================================
-# 3. 그래프 생성 (Matplotlib & ML)
-# ==========================================
 def draw_graph(full_history):
     if not full_history:
         return None
         
-    # 기본 폰트 및 테마 설정
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif']
     
@@ -77,14 +67,12 @@ def draw_graph(full_history):
     ax.spines['left'].set_color('#e2e8f0')
     ax.spines['bottom'].set_color('#e2e8f0')
     
-    # 1) 데이터 파싱 및 21일치 필터링
     parsed_history = []
     for item in full_history:
         item_copy = item.copy()
         item_copy['dt_obj'] = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
         parsed_history.append(item_copy)
         
-    # 역대 최저가 추출
     all_time_min_item = min(parsed_history, key=lambda x: x['price'])
     all_time_min = all_time_min_item['price'] / 1000.0
     all_time_min_date = all_time_min_item['timestamp'][:10]
@@ -94,7 +82,6 @@ def draw_graph(full_history):
     
     recent_history = [item for item in parsed_history if item['dt_obj'] > target_days_ago]
     
-    # 2) 아이템별 데이터 그룹화
     exact_stats = {name: [] for name in ITEM_COLORS.keys()}
     daily_stats = {name: {} for name in ITEM_COLORS.keys()}
     
@@ -117,7 +104,6 @@ def draw_graph(full_history):
     all_prices = []
     bbox_props = dict(boxstyle="round,pad=0.2", fc="#ffffff", ec="none", lw=0, alpha=0.85)
     
-    # 3) 아이템별 그래프 그리기
     for item_name, line_color in ITEM_COLORS.items():
         if not exact_stats[item_name]: continue
             
@@ -126,7 +112,6 @@ def draw_graph(full_history):
         e_prices = [x[1] for x in exact_stats[item_name]]
         all_prices.extend(e_prices)
         
-        # 음영 범위(밴드)
         if daily_stats[item_name]:
             sorted_dates = sorted(daily_stats[item_name].keys())
             mins = [daily_stats[item_name][d]['min'] for d in sorted_dates]
@@ -134,12 +119,10 @@ def draw_graph(full_history):
             d_dates = [datetime.strptime(d, '%Y-%m-%d') for d in sorted_dates]
             ax.fill_between(d_dates, mins, maxs, color=line_color, alpha=0.06, edgecolor='none')
             
-        # 더미 선 (범례용) 및 메인 실선
         ax.plot([], [], marker='o', color=line_color, linewidth=1.5, markersize=4.5, 
                 markerfacecolor='#ffffff', markeredgewidth=1.5, label=item_name.upper())
         ax.plot(e_dates, e_prices, color=line_color, linewidth=1.5)
 
-        # 머신러닝 예측선 (꼬리 부분)
         if len(e_dates) >= 3:
             X_time = mdates.date2num(e_dates).reshape(-1, 1)
             X_weekday = np.array([dt.weekday() for dt in e_dates]).reshape(-1, 1)
@@ -164,7 +147,6 @@ def draw_graph(full_history):
             ax.text(plot_dates[-1], plot_prices[-1], f' Pred ({accuracy_pct:.1f}%)', 
                      color=line_color, fontsize=6, fontweight='bold', alpha=0.9)
 
-        # 상승 직전 저점 필터링 로직
         candidate_indices = [i for i in range(len(e_prices) - 1) if e_prices[i] < e_prices[i+1]]
         if e_prices: candidate_indices.append(len(e_prices) - 1)
             
@@ -178,7 +160,6 @@ def draw_graph(full_history):
             best_idx = [i for i in indices if e_prices[i] == min_p][-1]
             annot_indices.append(best_idx)
             
-        # 어노테이션(말풍선) 부착
         for idx in sorted(annot_indices):
             txt = e_prices[idx]
             dt_obj = e_dates[idx]
@@ -186,7 +167,6 @@ def draw_graph(full_history):
             ax.plot(dt_obj, txt, marker='o', color=line_color, linewidth=0, 
                      markersize=5.0, markerfacecolor='#ffffff', markeredgewidth=1.5)
             
-            # 겹침 방지 (Higher count)
             higher_count = sum(
                 1 for nm, data in exact_stats.items()
                 if nm != item_name and data
@@ -197,7 +177,6 @@ def draw_graph(full_history):
                     ([val for d_val, val in data if d_val <= dt_obj][-1] == txt and nm > item_name))
             )
             
-            # 💡 가격 말풍선과 시간 간격을 넓히고 정렬을 맞춤 (Y축 간격 16px 통일)
             xy_offsets = [(0, 24), (0, -16), (0, -48)]
             time_offsets = [(0, 8), (0, -32), (0, -64)]
             offset_idx = min(higher_count, 2)
@@ -215,11 +194,9 @@ def draw_graph(full_history):
                          ha='center', fontsize=6.5, fontweight='700', color='#64748b', alpha=1.0, rotation=45)
             time_ann.set_path_effects([pe.withStroke(linewidth=1.5, foreground='#ffffff', alpha=0.9)])
     
-    # 4) 그래프 축 및 레이아웃 정리
     y_max = max(all_prices) if all_prices else TARGET_PRICE
     ax.set_ylim(min(120, all_time_min - 2), max(y_max * 1.05, 155))
     
-    # 기준선 (역대 최저가 및 목표가)
     ax.axhline(y=all_time_min, color='#94a3b8', linestyle=':', linewidth=1.5, alpha=0.8)
     ax.text(0.02, all_time_min - 0.5, f'All-Time Low ({all_time_min:,.0f}k) on {all_time_min_date}', 
             color='#94a3b8', fontweight='bold', fontsize=9, va='top', ha='left', transform=ax.get_yaxis_transform())
@@ -244,13 +221,10 @@ def draw_graph(full_history):
                fontsize=9, labelcolor='#334155', borderpad=0.8)
     
     plt.savefig(GRAPH_FILE, bbox_inches='tight', dpi=150) 
-    plt.close(fig) # 메모리 누수 방지
+    plt.close(fig) 
     
     return GRAPH_FILE
 
-# ==========================================
-# 4. 가격 수집 (Selenium)
-# ==========================================
 def fetch_current_prices(driver):
     current_results = {}
     now_kst = datetime.utcnow() + timedelta(hours=9)
@@ -275,9 +249,6 @@ def fetch_current_prices(driver):
             
     return current_results, now_kst
 
-# ==========================================
-# 5. 메인 로직 및 텔레그램 연동
-# ==========================================
 def build_messages(current_results, history, new_records_triggered, now_kst, graph_file):
     if new_records_triggered:
         header = f"💥💣 <b>[3주 최저가 갱신 ({', '.join(new_records_triggered)})!!]</b> 💣💥\n"
@@ -289,7 +260,6 @@ def build_messages(current_results, history, new_records_triggered, now_kst, gra
         for name in ITEM_COLORS.keys():
             if name in current_results:
                 curr_p = current_results[name]['price']
-                # 3주 이내 최저가 계산
                 target_days_ago = now_kst - timedelta(days=21)
                 recent = [x['price'] for x in history if x.get('item') == name and datetime.strptime(x['timestamp'], '%Y-%m-%d %H:%M:%S') > target_days_ago]
                 low_p = min(recent) if recent else curr_p
@@ -300,26 +270,17 @@ def build_messages(current_results, history, new_records_triggered, now_kst, gra
                        for name, res in current_results.items()]
     reply_markup = {"inline_keyboard": inline_keyboard}
     
-    cron_trigger = os.environ.get('CRON_TRIGGER', '')
-    is_regular_report = (cron_trigger == '0 23 * * *') or (cron_trigger == '')
-    
-    messages = []
-    if is_regular_report:
-        messages.append({"target": "regular", "text": format_message("📊 [정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup})
-    
-    messages.append({"target": "watch", "text": format_message("🔔 [수시 브리핑]"), "graph": graph_file, "reply_markup": reply_markup})
+    # 단일 정기 알림 메시지만 리턴
+    messages = [{"text": format_message("📊 [가방 가격 정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}]
     return messages
 
 def send_telegram(results):
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    if not chat_id or not results: return
-
-
+    token = os.environ.get('TELEGRAM_TOKEN')  # 가방 알림 대화방용 단일 토큰으로 통일
+    
+    if not chat_id or not token or not results: return
 
     for item in results:
-        token = os.environ.get('TELEGRAM_TOKEN_REGULAR') if item["target"] == "regular" else os.environ.get('TELEGRAM_TOKEN')
-        if not token: continue
-            
         data = {'chat_id': chat_id, 'caption': item["text"], 'parse_mode': 'HTML'}
         if item.get("reply_markup"):
             data['reply_markup'] = json.dumps(item["reply_markup"])
@@ -367,7 +328,7 @@ def main():
         send_telegram(messages)
         
     except Exception as e:
-        error_msg = [{"target": "watch", "text": f"⚠️ 가격 조회 시스템 에러 발생:\n{str(e)}", "graph": None, "reply_markup": None}]
+        error_msg = [{"text": f"⚠️ 가격 조회 시스템 에러 발생:\n{str(e)}", "graph": None, "reply_markup": None}]
         send_telegram(error_msg)
     finally:
         driver.quit()
