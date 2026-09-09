@@ -2,8 +2,7 @@ name: Sony Stock Checker
 
 on:
   schedule:
-    - cron: '0 23 * * *'   # 💡 매일 KST 오전 8시 (UTC 23시) 정기 브리핑
-#    - cron: '*/5 * * * *'  # 5분마다 가격 갱신 체크 (수시 브리핑용)
+    - cron: '0 23 * * *'   # 💡 매일 KST 오전 8시 (UTC 23시) 가방 가격 정기 브리핑
   workflow_dispatch:
 
 jobs:
@@ -22,20 +21,16 @@ jobs:
         python-version: '3.9'
 
     - name: Install dependencies
-      # 💡 머신러닝 예측을 위한 scikit-learn과 numpy 라이브러리가 추가되었습니다.
       run: |
         pip install selenium requests matplotlib scikit-learn numpy
 
     - name: Check Stock
       env:
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_TOKEN_REGULAR: ${{ secrets.TELEGRAM_TOKEN_REGULAR }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        CRON_TRIGGER: ${{ github.event.schedule }}
       run: python check_stock.py
 
     - name: Commit and Push changes
-      # 💡 가격 변동 기록(DB)을 GitHub에 계속 누적 저장합니다.
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
