@@ -15,12 +15,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from sklearn.linear_model import LinearRegression
 
+# iplay80 추가 및 PC버전 URL로 적용
 ITEMS_INFO = {
     "daypack": "https://search.danawa.com/dsearch.php?query=09J29360&originalQuery=09J29360&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
     "allday": "https://search.danawa.com/dsearch.php?query=09J09243&originalQuery=09J09243&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
-    "daynhalf": "https://search.danawa.com/dsearch.php?query=09J29453&originalQuery=09J29453&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N"
+    "daynhalf": "https://search.danawa.com/dsearch.php?query=09J29453&originalQuery=09J29453&checkedInfo=N&volumeType=allvs&page=1&limit=40&sort=priceASC&list=list&boost=true&tab=main&addDelivery=N",
+    "iplay80": "https://search.danawa.com/dsearch.php?query=iplay80+mini+turbo&tab=main" 
 }
-ITEM_COLORS = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981"}
+# iplay80의 그래프 색상(보라색) 추가
+ITEM_COLORS = {"daypack": "#2563eb", "allday": "#ea580c", "daynhalf": "#10b981", "iplay80": "#8b5cf6"}
 HISTORY_FILE = 'price_history.json'
 GRAPH_FILE = 'price_graph.png'
 TARGET_PRICE = 150
@@ -270,13 +273,12 @@ def build_messages(current_results, history, new_records_triggered, now_kst, gra
                        for name, res in current_results.items()]
     reply_markup = {"inline_keyboard": inline_keyboard}
     
-    # 단일 정기 알림 메시지만 리턴
-    messages = [{"text": format_message("📊 [가방 가격 정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}]
+    messages = [{"text": format_message("📊 [상품 가격 정기 브리핑]"), "graph": graph_file, "reply_markup": reply_markup}]
     return messages
 
 def send_telegram(results):
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    token = os.environ.get('TELEGRAM_TOKEN')  # 가방 알림 대화방용 단일 토큰으로 통일
+    token = os.environ.get('TELEGRAM_TOKEN') 
     
     if not chat_id or not token or not results: return
 
