@@ -1,9 +1,10 @@
 import yfinance as yf
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 텔레그램 설정
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -28,19 +29,31 @@ VERTICAL_GRID_COLOR = '#E8EAED'
 
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-def create_and_send_chart(period, title_prefix, x_interval):
+def create_and_send_chart(period_label, title_prefix, x_interval):
     fig, axes = plt.subplots(3, 1, figsize=(9, 12.5), facecolor=BG_COLOR)
     fig.suptitle(f'{title_prefix} ({today_str})', fontsize=16, fontweight='bold', color=TEXT_COLOR, y=0.975)
+
+    today = datetime.now()
+    if period_label == '1y':
+        target_start_str = (today - timedelta(days=365)).strftime('%Y-%m-%d')
+        fetch_period = '2y' # 1년치 그래프를 위해 2년치 데이터 사전 확보
+    else:
+        target_start_str = (today - timedelta(days=365*3)).strftime('%Y-%m-%d')
+        fetch_period = '5y' # 3년치 그래프를 위해 5년치 데이터 사전 확보
 
     for ax, (name, ticker) in zip(axes, tickers.items()):
         ax.set_facecolor(BG_COLOR)
         
-        # 데이터 다운로드 (기간 변수 적용)
-        data = yf.download(ticker, period=period)
-        close_prices = data['Close'].squeeze()
+        # 넉넉한 기간의 과거 데이터를 다운로드하여 초기 이평선 공백 방지
+        data = yf.download(ticker, period=fetch_period)
+        all_close = data['Close'].squeeze()
         
-        # 60일 이평선 계산
-        ma_60 = close_prices.rolling(window=60).mean()
+        # 전체 데이터 기준으로 60일 이평선 선계산
+        all_ma_60 = all_close.rolling(window=60).mean()
+        
+        # 실제 그래프에 표시할 기간만 슬라이싱
+        close_prices = all_close.loc[target_start_str:]
+        ma_60 = all_ma_60.loc[target_start_str:]
         
         # 해당일 구매 시 현재 수익률 계산 (%)
         current_price = close_prices.iloc[-1]
@@ -57,7 +70,7 @@ def create_and_send_chart(period, title_prefix, x_interval):
         line1 = ax.plot(close_prices.index, close_prices, color=MAIN_COLOR, linewidth=1.2, alpha=0.8, label='Price')
         ax.fill_between(close_prices.index, close_prices, bottom_limit, color=MAIN_COLOR, alpha=0.05)
         
-        # 60일 이동평균선
+        # 60일 이동평균선 (과거 자료를 활용해 그래프 시작점부터 꽉 채워서 표시)
         line2 = ax.plot(close_prices.index, ma_60, color=MA_COLOR, linewidth=1.0, alpha=0.8, label='60-Day MA')
         
         # === 보조축(수익률) 추가 ===
@@ -86,7 +99,7 @@ def create_and_send_chart(period, title_prefix, x_interval):
         
         ax.tick_params(axis='both', which='major', labelsize=10, colors=SUB_TEXT_COLOR, length=0, pad=10)
         
-        # X축 날짜 간격 설정 (3년은 3개월, 1년은 1개월 간격)
+        # X축 날짜 간격 설정
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         ax.xaxis.set_major_locator(mdates.MonthLocator(interval=x_interval))
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
@@ -94,21 +107,21 @@ def create_and_send_chart(period, title_prefix, x_interval):
     plt.tight_layout(rect=[0, 0.01, 1, 0.955], h_pad=2.8)
     
     # 파일명 분리 저장
-    image_path = f'tiger_etf_modern_{period}.png'
+    image_path = f'tiger_etf_modern_{period_label}.png'
     plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
-    plt.close(fig) # 메모리 누수 방지
+    plt.close(fig) 
 
     # 텔레그램 전송
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     with open(image_path, 'rb') as photo:
         payload = {
             'chat_id': TELEGRAM_CHAT_ID,
-            'caption': f'📊 오늘의 주식 시장 요약입니다. ({period.upper()} Trend - {today_str})\n파란선: 현재가 / 주황선: 60일 이평선 / 초록점선: 해당 일 매수 시 현재 수익률(%)'
+            'caption': f'📊 오늘의 주식 시장 요약입니다. ({period_label.upper()} Trend - {today_str})\n파란선: 현재가 / 주황선: 60일 이평선 / 초록점선: 해당 일 매수 시 현재 수익률(%)'
         }
         requests.post(url, data=payload, files={'photo': photo})
 
 # 3년치 데이터 전송 (X축 3개월 간격)
-create_and_send_chart(period='3y', title_prefix='Korean Listed ETFs 3-Year Trend', x_interval=3)
+create_and_send_chart(period_label='3y', title_prefix='Korean Listed ETFs 3-Year Trend', x_interval=3)
 
 # 1년치 데이터 연달아 전송 (X축 1개월 간격)
-create_and_send_chart(period='1y', title_prefix='Korean Listed ETFs 1-Year Trend', x_interval=1)
+create_and_send_chart(period_label='1y', title_prefix='Korean Listed ETFs 1-Year Trend', x_interval=1)
