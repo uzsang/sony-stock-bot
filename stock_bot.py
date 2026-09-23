@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 # 텔레그램 설정
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+TELEGRAM_CHAT_ID = os.environ.get('BAG_CHAT_ID')
 
 # 조회할 티커 심볼
 tickers = {
