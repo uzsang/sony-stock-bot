@@ -2,7 +2,7 @@ name: Sony Stock Checker
 
 on:
   schedule:
-    - cron: '0 23 * * *'   # 💡 매일 KST 오전 8시 (UTC 23시) 가방 가격 정기 브리핑
+    - cron: '0 23 * * 1-5'   # 💡 매일 KST 오전 8시 (UTC 23시) 가방 가격 정기 브리핑
   workflow_dispatch:
 
 jobs:
